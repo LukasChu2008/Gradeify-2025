@@ -1,7 +1,7 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import "./App.css";
 
-function App() {
+export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
 
@@ -17,11 +17,11 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app-container">
       {!isLoggedIn ? (
-        // -------- FRONT PAGE (login) --------
         <div className="login-page">
-          <h1 className="title">Gradeify</h1>
+          <h1 className="title">Gradeify 2025</h1>
+          <p className="subtitle">Track your grades and stay on top of your classes!</p>
           <form onSubmit={handleLogin} className="login-form">
             <input
               type="text"
@@ -34,15 +34,12 @@ function App() {
           </form>
         </div>
       ) : (
-        // -------- DASHBOARD --------
         <div className="dashboard">
           <h1>Welcome, {username}!</h1>
-          <p>This is your dashboard. Grades will appear here later.</p>
+          <p>Your dashboard will appear here.</p>
           <button onClick={handleLogout}>Log Out</button>
         </div>
       )}
     </div>
   );
 }
-
-export default App;
