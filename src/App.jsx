@@ -1,50 +1,45 @@
-// src/App.jsx
 import { useState } from "react";
 import "./App.css";
 
 function App() {
-  const [currentGrade, setCurrentGrade] = useState("");
-  const [expectedScore, setExpectedScore] = useState("");
-  const [weight, setWeight] = useState("");
-  const [newGrade, setNewGrade] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState("");
 
-  const calculate = () => {
-    if (!currentGrade || !expectedScore || !weight) return;
-    const weighted =
-      (currentGrade * (100 - weight) + expectedScore * weight) / 100;
-    setNewGrade(weighted.toFixed(2));
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (username.trim() === "") return;
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    setUsername("");
+    setIsLoggedIn(false);
   };
 
   return (
-    <div className="App">
-      <h1>📊 Gradeify</h1>
-      <p>Test how your grade changes with upcoming assignments</p>
-
-      <input
-        type="number"
-        placeholder="Current Grade (%)"
-        value={currentGrade}
-        onChange={(e) => setCurrentGrade(e.target.value)}
-      />
-      <input
-        type="number"
-        placeholder="Expected Score (%)"
-        value={expectedScore}
-        onChange={(e) => setExpectedScore(e.target.value)}
-      />
-      <input
-        type="number"
-        placeholder="Assignment Weight (%)"
-        value={weight}
-        onChange={(e) => setWeight(e.target.value)}
-      />
-
-      <button onClick={calculate}>Calculate</button>
-
-      {newGrade && (
-        <h2>
-          ✅ Your new overall grade would be: <span>{newGrade}%</span>
-        </h2>
+    <div className="app">
+      {!isLoggedIn ? (
+        // -------- FRONT PAGE (login) --------
+        <div className="login-page">
+          <h1 className="title">Gradeify</h1>
+          <form onSubmit={handleLogin} className="login-form">
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <input type="password" placeholder="Password" />
+            <button type="submit">Log In</button>
+          </form>
+        </div>
+      ) : (
+        // -------- DASHBOARD --------
+        <div className="dashboard">
+          <h1>Welcome, {username}!</h1>
+          <p>This is your dashboard. Grades will appear here later.</p>
+          <button onClick={handleLogout}>Log Out</button>
+        </div>
       )}
     </div>
   );
