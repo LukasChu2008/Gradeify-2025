@@ -4,7 +4,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #ff7e5f, #feb47b); /* sunset gradient */
+  background: linear-gradient(135deg, #3100ff, #00ffe3); /* sunset gradient */
   font-family: 'Arial', sans-serif;
 }
 
