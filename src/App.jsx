@@ -20,7 +20,7 @@ export default function App() {
     <div className="app-container">
       {!isLoggedIn ? (
         <div className="login-page">
-          <h1 className="title">Gradeify 2025</h1>
+          <h1 className="title">Gradeify</h1>
           <p className="subtitle">Track your grades and stay on top of your classes!</p>
           <form onSubmit={handleLogin} className="login-form">
             <input
