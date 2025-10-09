@@ -23,9 +23,8 @@ export default function Login() {
       await loginStudentVue({
         username: username.trim(),
         password,
-        districtUrl: districtUrl.trim() || undefined,
+        districtUrl: districtUrl.trim() || undefined
       });
-      // session is stored via httpOnly cookie; just navigate
       navigate("/dashboard");
     } catch (e) {
       setErr(e?.message || "Login failed");
@@ -40,8 +39,7 @@ export default function Login() {
     try {
       const z = zip.trim();
       if (!z) throw new Error("Enter a ZIP code first.");
-      const res = await lookupDistricts(z);
-      // accept either { list: [...] } or plain array
+      const res = await lookupDistricts(z); // requires backend route
       const list = Array.isArray(res) ? res : res?.list || [];
       setDisList(list);
       if (!list.length) setErr("No districts found for that ZIP.");
@@ -55,15 +53,12 @@ export default function Login() {
 
   function chooseDistrict(url) {
     setDistrictUrl(url);
-    // optionally clear results after choosing
-    // setDisList(null);
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-4">
+    <div className="max-w-md mx-auto p-6 space-y-3">
       <h1 className="text-2xl font-semibold">Sign in with StudentVUE</h1>
 
-      {/* District search */}
       <div className="border p-3 rounded space-y-2">
         <p className="text-sm">Don’t know your portal URL? Search by ZIP.</p>
         <div className="flex gap-2">
@@ -72,14 +67,9 @@ export default function Login() {
             onChange={(e) => setZip(e.target.value)}
             placeholder="ZIP code"
             inputMode="numeric"
-            className="border p-2 flex-1 rounded"
+            className="border p-2 flex-1"
           />
-          <button
-            type="button"
-            onClick={onLookup}
-            disabled={finding || !zip.trim()}
-            className="border px-3 py-2 rounded"
-          >
+          <button type="button" onClick={onLookup} disabled={finding || !zip.trim()} className="border px-3">
             {finding ? "Finding…" : "Find"}
           </button>
         </div>
@@ -87,10 +77,8 @@ export default function Login() {
         {disList && (
           <div className="max-h-48 overflow-auto mt-2 border rounded">
             {disList.map((d, i) => {
-              // support objects like {name,url} or strings (url)
               const name = typeof d === "string" ? d : d.name || d.Url || d.url || "";
-              const url =
-                typeof d === "string" ? d : d.url || d.Url || d.PXPURL || d.PortalUrl || d.name || "";
+              const url  = typeof d === "string" ? d : d.url || d.Url || d.PXPURL || d.PortalUrl || d.name || "";
               return (
                 <button
                   key={i}
@@ -108,13 +96,12 @@ export default function Login() {
         )}
       </div>
 
-      {/* Login form */}
       <form onSubmit={onSubmit} className="space-y-2">
         <input
           value={districtUrl}
           onChange={(e) => setDistrictUrl(e.target.value)}
           placeholder="District Portal URL (e.g., https://<district>.edupoint.com)"
-          className="border p-2 w-full rounded"
+          className="border p-2 w-full"
           autoComplete="url"
           required
         />
@@ -122,7 +109,7 @@ export default function Login() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Username"
-          className="border p-2 w-full rounded"
+          className="border p-2 w-full"
           autoComplete="username"
           required
         />
@@ -131,18 +118,12 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="border p-2 w-full rounded"
+          className="border p-2 w-full"
           autoComplete="current-password"
           required
         />
-
-        {err && <p className="text-red-600 text-sm">{err}</p>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="border px-4 py-2 rounded w-full"
-        >
+        {err && <p className="text-red-600">{err}</p>}
+        <button disabled={loading} className="border px-4 py-2 w-full">
           {loading ? "Logging in…" : "Log in"}
         </button>
       </form>

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchGradebook, fetchAttendance } from '../api/studentvue';
+import { useEffect, useState } from "react";
+import { fetchGradebook, fetchAttendance } from "../api/studentvue";
 
 export default function Dashboard() {
   const [gradebook, setGradebook] = useState(null);
@@ -8,18 +8,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const sessionId = localStorage.getItem('sv-session-id'); // get session ID
-
-      if (!sessionId) {
-        setErr('No session found. Please log in.');
-        return;
-      }
-
       try {
-        const g = await fetchGradebook(sessionId);
+        const g = await fetchGradebook();
         setGradebook(g);
-
-        const a = await fetchAttendance(sessionId);
+        const a = await fetchAttendance();
         setAttendance(a);
       } catch (e) {
         setErr(e.message);
@@ -33,12 +25,12 @@ export default function Dashboard() {
     <div className="p-6">
       <h1 className="text-2xl font-semibold mb-4">Your Grades</h1>
       <pre className="bg-gray-100 p-3 rounded overflow-auto">
-        {gradebook ? JSON.stringify(gradebook, null, 2) : 'Loading…'}
+        {gradebook ? JSON.stringify(gradebook, null, 2) : "Loading…"}
       </pre>
 
       <h2 className="text-xl font-semibold mt-6 mb-2">Attendance</h2>
       <pre className="bg-gray-100 p-3 rounded overflow-auto">
-        {attendance ? JSON.stringify(attendance, null, 2) : 'Loading…'}
+        {attendance ? JSON.stringify(attendance, null, 2) : "Loading…"}
       </pre>
     </div>
   );
