@@ -53,3 +53,20 @@ export const listGrades = (classId) => request(`/me/classes/${classId}/grades`);
 export const createGrade = (classId, payload) => request(`/me/classes/${classId}/grades`, { method: "POST", body: payload });
 export const updateGrade = (id, payload) => request(`/me/grades/${id}`, { method: "PUT", body: payload });
 export const deleteGrade = (id) => request(`/me/grades/${id}`, { method: "DELETE" });
+
+// … existing request(), auth & classes & grades …
+
+export const listCategories = (classId) =>
+  request(`/me/classes/${classId}/categories`);
+
+export const createCategory = (classId, payload) =>
+  request(`/me/classes/${classId}/categories`, { method: "POST", body: payload });
+
+export const updateCategory = (id, payload) =>
+  request(`/me/categories/${id}`, { method: "PUT", body: payload });
+
+export const deleteCategory = (id) =>
+  request(`/me/categories/${id}`, { method: "DELETE" });
+
+export const getSummary = (classId) =>
+  request(`/me/classes/${classId}/summary`);

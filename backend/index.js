@@ -193,5 +193,145 @@ app.delete("/me/grades/:id", requireUser, (req, res) => {
   res.json({ ok: true });
 });
 
+// ====== CATEGORIES (CRUD) ======
+app.get("/me/classes/:classId/categories", requireUser, (req, res) => {
+  const { classId } = req.params;
+  const rows = db.prepare(
+    "SELECT * FROM categories WHERE class_id=? AND user_id=? ORDER BY name"
+  ).all(classId, req.session.userId);
+  res.json({ ok: true, categories: rows });
+});
+
+app.post("/me/classes/:classId/categories", requireUser, (req, res) => {
+  const { classId } = req.params;
+  const { name = "", weight_percent } = req.body || {};
+  if (!name.trim()) return res.status(400).json({ error: "Category name is required." });
+  const w = Number(weight_percent);
+  if (!Number.isFinite(w) || w <= 0 || w > 100) {
+    return res.status(400).json({ error: "Weight must be 1–100." });
+  }
+  const classExists = db.prepare("SELECT 1 FROM classes WHERE id=? AND user_id=?")
+    .get(classId, req.session.userId);
+  if (!classExists) return res.status(404).json({ error: "Class not found." });
+
+  const id = newId();
+  db.prepare(`
+    INSERT INTO categories (id, user_id, class_id, name, weight_percent, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, req.session.userId, classId, name.trim(), w, new Date().toISOString());
+  const row = db.prepare("SELECT * FROM categories WHERE id=?").get(id);
+  res.json({ ok: true, category: row });
+});
+
+app.put("/me/categories/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const { name, weight_percent } = req.body || {};
+  const exists = db.prepare("SELECT * FROM categories WHERE id=? AND user_id=?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Category not found." });
+
+  const w = weight_percent == null ? null : Number(weight_percent);
+  if (w != null && (!Number.isFinite(w) || w <= 0 || w > 100)) {
+    return res.status(400).json({ error: "Weight must be 1–100." });
+  }
+
+  db.prepare(`
+    UPDATE categories SET
+      name = COALESCE(?, name),
+      weight_percent = COALESCE(?, weight_percent)
+    WHERE id=? AND user_id=?
+  `).run(name?.trim() ?? null, w ?? null, id, req.session.userId);
+
+  const row = db.prepare("SELECT * FROM categories WHERE id=?").get(id);
+  res.json({ ok: true, category: row });
+});
+
+app.delete("/me/categories/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const exists = db.prepare("SELECT 1 FROM categories WHERE id=? AND user_id=?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Category not found." });
+  db.prepare("DELETE FROM categories WHERE id=? AND user_id=?").run(id, req.session.userId);
+  res.json({ ok: true });
+});
+
+// ====== SUMMARY (overall grade) ======
+app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
+  const { classId } = req.params;
+
+  const cats = db.prepare(
+    "SELECT id, name, weight_percent FROM categories WHERE class_id=? AND user_id=?"
+  ).all(classId, req.session.userId);
+
+  const grades = db.prepare(
+    "SELECT title, points_earned, points_possible, category FROM grades WHERE class_id=? AND user_id=?"
+  ).all(classId, req.session.userId);
+
+  // Build per-category totals
+  const byCat = new Map();
+  for (const g of grades) {
+    const key = (g.category || "Uncategorized").trim().toLowerCase();
+    const cur = byCat.get(key) || { earned: 0, possible: 0, name: g.category || "Uncategorized" };
+    cur.earned += Number(g.points_earned) || 0;
+    cur.possible += Number(g.points_possible) || 0;
+    byCat.set(key, cur);
+  }
+
+  // Map categories to weights
+  let sumWeights = 0;
+  const catRows = cats.map(c => {
+    sumWeights += Number(c.weight_percent) || 0;
+    const key = c.name.trim().toLowerCase();
+    const agg = byCat.get(key) || { earned: 0, possible: 0, name: c.name };
+    const pct = agg.possible > 0 ? (agg.earned / agg.possible) * 100 : null;
+    return {
+      id: c.id,
+      name: c.name,
+      weight_percent: Number(c.weight_percent),
+      earned: agg.earned,
+      possible: agg.possible,
+      percent: pct
+    };
+  });
+
+  // Any grades in categories that aren't defined → show them as zero-weight extras
+  for (const [key, agg] of byCat) {
+    const already = catRows.find(r => r.name.trim().toLowerCase() === key);
+    if (!already) {
+      catRows.push({
+        id: null, name: agg.name, weight_percent: 0,
+        earned: agg.earned, possible: agg.possible,
+        percent: agg.possible > 0 ? (agg.earned / agg.possible) * 100 : null
+      });
+    }
+  }
+
+  // Compute overall: weighted average of category percents (ignore any 0-weight)
+  let overall = null;
+  if (sumWeights > 0) {
+    let acc = 0;
+    for (const c of catRows) {
+      if (c.weight_percent > 0 && c.percent != null) {
+        acc += (c.percent * c.weight_percent) / 100;
+      }
+    }
+    // If weights don't sum to 100, scale by (sumWeights / 100) so users can partially set them.
+    overall = acc * (100 / sumWeights);
+  } else {
+    // No weights: fall back to straight points across all grades
+    const totalEarned = grades.reduce((a, g) => a + (+g.points_earned || 0), 0);
+    const totalPossible = grades.reduce((a, g) => a + (+g.points_possible || 0), 0);
+    overall = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
+  }
+
+  res.json({
+    ok: true,
+    overallPercent: overall,
+    categories: catRows,
+    sumWeights
+  });
+});
+
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
