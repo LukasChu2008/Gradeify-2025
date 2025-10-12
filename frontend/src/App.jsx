@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AuthLogin from "./pages/AuthLogin.jsx";
 import Register from "./pages/Register.jsx";
 import ManualDashboard from "./pages/ManualDashboard.jsx";
+import "./App.css"; // ✅ load component/page styles
 
 function ErrorBoundary({ children }) {
   const [err, setErr] = useState(null);
@@ -21,7 +22,7 @@ function ErrorBoundary({ children }) {
 
   useEffect(() => {
     if (err) setErr(null);
-  }, [location.pathname]); // reset on route change
+  }, [location.pathname]);
 
   if (err) {
     return (

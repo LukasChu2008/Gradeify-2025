@@ -1,169 +1,14 @@
-/* Full-page gradient background */
-.app-container {
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: linear-gradient(135deg, #3100ff, #00ffe3); /* blue gradient */
-  font-family: 'Arial', sans-serif;
-}
-
-/* Card for login form */
-.login-page {
-  background: white; /* keep card white */
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: 0 15px 40px rgba(0,0,0,0.3);
-  text-align: center;
-  width: 320px;
-  color: #333; /* dark text for contrast */
-}
-
-/* Title + subtitle */
-.title {
-  color: #3100ff; /* blue */
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-}
-
-.subtitle {
-  color: #000000; /* medium gray */
-  font-size: 1rem;
-  margin-bottom: 20px;
-}
-
-/* Form styles */
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.login-form input {
-  padding: 10px;
-  font-size: 1rem;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  outline: none;
-}
-
-.login-form button {
-  padding: 10px;
-  font-size: 1rem;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(90deg, #00ffe3, #3100ff); /* blue */
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.login-form button:hover {
-  transform: scale(1.05);
-}
-
-/* Dashboard page */
-.dashboard {
-  text-align: center;
-  color: #333;
-}
-
-.dashboard button {
-  margin-top: 20px;
-  padding: 10px 20px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(90deg, #60667a, #60667a); /* green-blue gradient */
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.dashboard button:hover {
-  transform: scale(1.05);
-}
-/* Cozy, student vibe overrides */
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
 
-.app-container {
-  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
-  font-family: 'Nunito', sans-serif;
-}
-
-.login-page {
-  background: #fffdf9;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  border: 1px solid #f3f4f6;
-}
-
-.title {
-  color: #4b5563;
-  font-weight: 700;
-}
-
-.subtitle {
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.login-form input {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  transition: box-shadow 0.2s, border 0.2s;
-}
-
-.login-form input:focus {
-  border-color: #a5b4fc;
-  box-shadow: 0 0 5px rgba(165, 180, 252, 0.6);
-}
-
-.login-form button {
-  background: linear-gradient(90deg, #a5b4fc, #f9a8d4);
-  font-weight: 700;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.login-form button:hover {
-  transform: scale(1.04);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-.error-text {
-  color: #ef4444;
-  font-size: 0.85rem;
-}
-
-.switch-link {
-  margin-top: 15px;
-  color: #6b7280;
-}
-
-.link {
-  color: #6366f1;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-html, body, #root {
-  height: 100%;
-  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
-}
-/* Full-page cozy gradient */
 .app-container {
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #fbe8f0, #d0f0fd, #fef9e7);
   font-family: 'Nunito', sans-serif;
 }
 
-/* Card styling */
+/* Card */
 .login-page {
   background: #fffdf6;
   padding: 50px 40px;
@@ -172,36 +17,42 @@ html, body, #root {
   text-align: center;
   width: 380px;
   max-width: 90%;
+  color: #333;
 }
 
 /* Titles */
 .title {
-  font-size: 2.8rem;
+  font-size: 2.6rem;
   font-weight: 700;
-  color: #4b4b4b;
-  margin-bottom: 5px;
+  color: #4b5563;
+  margin-bottom: 6px;
 }
 
 .subtitle {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 500;
-  color: #6b6b6b;
-  margin-bottom: 30px;
+  color: #6b7280;
+  margin-bottom: 28px;
 }
 
-/* Form fields */
+/* Form */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  margin-bottom: 20px;
+  gap: 6px;
   width: 100%;
 }
 
 .form-group label {
   font-size: 0.95rem;
-  margin-bottom: 6px;
-  color: #4b4b4b;
+  color: #4b5563;
   font-weight: 600;
 }
 
@@ -209,26 +60,26 @@ html, body, #root {
   width: 100%;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid #e2e2e2;
-  background: #fcfcfc;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
   font-size: 1rem;
-  transition: all 0.2s;
+  transition: border 0.2s, box-shadow 0.2s;
 }
 
 .form-group input:focus {
   outline: none;
   border-color: #a5b4fc;
-  box-shadow: 0 0 8px rgba(165, 180, 252, 0.4);
+  box-shadow: 0 0 8px rgba(165, 180, 252, 0.35);
 }
 
 /* Button */
 .login-form button {
   width: 100%;
   padding: 12px;
-  border-radius: 15px;
+  border-radius: 14px;
   border: none;
   background: linear-gradient(90deg, #f9a8d4, #a5b4fc);
-  color: #fff;
+  color: white;
   font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
@@ -240,30 +91,25 @@ html, body, #root {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
 }
 
-/* Error text */
+/* Error + links */
 .error-text {
   color: #ef4444;
   font-size: 0.85rem;
-  margin-top: -10px;
-  margin-bottom: 10px;
-  text-align: left;
+  margin-top: -6px;
 }
 
-/* Links */
 .switch-link {
-  margin-top: 20px;
-  font-size: 0.9rem;
-  color: #6b6b6b;
+  margin-top: 18px;
+  font-size: 0.92rem;
+  color: #6b7280;
 }
 
 .link {
   color: #6366f1;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
 }
 
 .link:hover {
   text-decoration: underline;
 }
-
-

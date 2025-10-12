@@ -53,7 +53,9 @@ export default function AuthLogin() {
 
         {err && <p className="error-text">{err}</p>}
 
-        <button disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
+        <button disabled={loading}>
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
       </form>
 
       <p className="switch-link">

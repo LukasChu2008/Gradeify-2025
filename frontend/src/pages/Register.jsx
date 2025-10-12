@@ -53,7 +53,9 @@ export default function Register() {
 
         {err && <p className="error-text">{err}</p>}
 
-        <button disabled={loading}>{loading ? "Creating…" : "Create account"}</button>
+        <button disabled={loading}>
+          {loading ? "Creating…" : "Create account"}
+        </button>
       </form>
 
       <p className="switch-link">
