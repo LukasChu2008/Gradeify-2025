@@ -153,4 +153,117 @@ html, body, #root {
   height: 100%;
   background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
 }
+/* Full-page cozy gradient */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #fbe8f0, #d0f0fd, #fef9e7);
+  font-family: 'Nunito', sans-serif;
+}
+
+/* Card styling */
+.login-page {
+  background: #fffdf6;
+  padding: 50px 40px;
+  border-radius: 25px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12);
+  text-align: center;
+  width: 380px;
+  max-width: 90%;
+}
+
+/* Titles */
+.title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #4b4b4b;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #6b6b6b;
+  margin-bottom: 30px;
+}
+
+/* Form fields */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.form-group label {
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+  color: #4b4b4b;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e2e2;
+  background: #fcfcfc;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 8px rgba(165, 180, 252, 0.4);
+}
+
+/* Button */
+.login-form button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 15px;
+  border: none;
+  background: linear-gradient(90deg, #f9a8d4, #a5b4fc);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.login-form button:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Error text */
+.error-text {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-top: -10px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+/* Links */
+.switch-link {
+  margin-top: 20px;
+  font-size: 0.9rem;
+  color: #6b6b6b;
+}
+
+.link {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
 
