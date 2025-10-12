@@ -11,7 +11,8 @@ export default function Register() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    setErr(null); setLoading(true);
+    setErr(null);
+    setLoading(true);
     try {
       await register({ username: username.trim(), password });
       nav("/manual");
@@ -23,19 +24,33 @@ export default function Register() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-3">
-      <h1 className="text-2xl font-semibold">Create Gradeify Account</h1>
-      <form onSubmit={onSubmit} className="space-y-2">
-        <input className="border p-2 w-full" placeholder="Username"
-               value={username} onChange={e => setUsername(e.target.value)} required />
-        <input className="border p-2 w-full" placeholder="Password" type="password"
-               value={password} onChange={e => setPassword(e.target.value)} required />
-        {err && <p className="text-red-600 text-sm">{err}</p>}
-        <button disabled={loading} className="border px-4 py-2 w-full">
+    <div className="login-page">
+      <h1 className="title">Join Gradeify ✨</h1>
+      <p className="subtitle">Make tracking your grades a breeze 🌸</p>
+
+      <form onSubmit={onSubmit} className="login-form">
+        <input
+          placeholder="Choose a username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Create a password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        {err && <p className="error-text">{err}</p>}
+        <button disabled={loading}>
           {loading ? "Creating…" : "Create account"}
         </button>
       </form>
-      <p className="text-sm">Already have an account? <Link to="/login" className="underline">Sign in</Link></p>
+
+      <p className="switch-link">
+        Already have an account? <Link to="/login" className="link">Sign in</Link>
+      </p>
     </div>
   );
 }

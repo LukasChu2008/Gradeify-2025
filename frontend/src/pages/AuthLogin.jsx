@@ -24,33 +24,32 @@ export default function AuthLogin() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-3">
-      <h1 className="text-2xl font-semibold">Sign in (Gradeify)</h1>
+    <div className="login-page">
+      <h1 className="title">Gradeify ☕</h1>
+      <p className="subtitle">Welcome back! Let’s get you studying 🎧</p>
 
-      <form onSubmit={onSubmit} className="space-y-2">
+      <form onSubmit={onSubmit} className="login-form">
         <input
-          className="border p-2 w-full"
           placeholder="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           required
         />
         <input
-          className="border p-2 w-full"
           placeholder="Password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {err && <p className="text-red-600 text-sm">{err}</p>}
-        <button disabled={loading} className="border px-4 py-2 w-full">
+        {err && <p className="error-text">{err}</p>}
+        <button disabled={loading}>
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      <p className="text-sm">
-        No account? <Link to="/register" className="underline">Create one</Link>
+      <p className="switch-link">
+        No account? <Link to="/register" className="link">Create one</Link>
       </p>
     </div>
   );

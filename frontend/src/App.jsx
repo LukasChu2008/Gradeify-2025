@@ -28,7 +28,7 @@ function ErrorBoundary({ children }) {
       <div style={{ padding: 16 }}>
         <h1 style={{ color: "#b00020" }}>Something broke at runtime</h1>
         <pre style={{ background: "#f7f7f7", padding: 12, borderRadius: 8, overflow: "auto", whiteSpace: "pre-wrap" }}>
-{String(err?.stack || err?.message || err)}
+          {String(err?.stack || err?.message || err)}
         </pre>
         <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
           <Link to="/login" replace className="border px-3 py-2 rounded">Back to login</Link>
@@ -43,13 +43,15 @@ function ErrorBoundary({ children }) {
 export default function App() {
   return (
     <ErrorBoundary>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<AuthLogin />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/manual" element={<ManualDashboard />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <div className="app-container">
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<AuthLogin />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/manual" element={<ManualDashboard />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </div>
     </ErrorBoundary>
   );
 }

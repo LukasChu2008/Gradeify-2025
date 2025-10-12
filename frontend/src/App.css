@@ -84,3 +84,73 @@
 .dashboard button:hover {
   transform: scale(1.05);
 }
+/* Cozy, student vibe overrides */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+
+.app-container {
+  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
+  font-family: 'Nunito', sans-serif;
+}
+
+.login-page {
+  background: #fffdf9;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #f3f4f6;
+}
+
+.title {
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.login-form input {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  transition: box-shadow 0.2s, border 0.2s;
+}
+
+.login-form input:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 5px rgba(165, 180, 252, 0.6);
+}
+
+.login-form button {
+  background: linear-gradient(90deg, #a5b4fc, #f9a8d4);
+  font-weight: 700;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.login-form button:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 0.85rem;
+}
+
+.switch-link {
+  margin-top: 15px;
+  color: #6b7280;
+}
+
+.link {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+html, body, #root {
+  height: 100%;
+  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
+}
+
