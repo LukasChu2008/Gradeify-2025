@@ -15,6 +15,12 @@ export default function Login() {
   const [finding, setFinding] = useState(false);
   const [disList, setDisList] = useState(null);
 
+  const canSubmit =
+    districtUrl.trim().length > 0 &&
+    username.trim().length > 0 &&
+    password.length > 0 &&
+    !loading;
+
   async function onSubmit(e) {
     e.preventDefault();
     setErr(null);
@@ -23,7 +29,7 @@ export default function Login() {
       await loginStudentVue({
         username: username.trim(),
         password,
-        districtUrl: districtUrl.trim() || undefined
+        districtUrl: districtUrl.trim() || undefined,
       });
       navigate("/dashboard");
     } catch (e) {
@@ -52,11 +58,19 @@ export default function Login() {
   }
 
   function chooseDistrict(url) {
-    setDistrictUrl(url);
+    if (!url) return;
+    setDistrictUrl(String(url).trim());
+    // optionally clear results after choosing:
+    // setDisList(null);
   }
 
+  // Helpful tips when error suggests SSO / D21xx
+  const showSsoTips =
+    typeof err === "string" &&
+    (/single sign-on/i.test(err) || /critical error|D21/i.test(err));
+
   return (
-    <div className="max-w-md mx-auto p-6 space-y-3">
+    <div className="max-w-md mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Sign in with StudentVUE</h1>
 
       <div className="border p-3 rounded space-y-2">
@@ -67,18 +81,40 @@ export default function Login() {
             onChange={(e) => setZip(e.target.value)}
             placeholder="ZIP code"
             inputMode="numeric"
-            className="border p-2 flex-1"
+            className="border p-2 flex-1 rounded"
           />
-          <button type="button" onClick={onLookup} disabled={finding || !zip.trim()} className="border px-3">
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onLookup}
+            disabled={finding || !zip.trim()}
+            className="border px-3 py-2 rounded"
+          >
             {finding ? "Finding…" : "Find"}
           </button>
+          {disList && disList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDisList(null)}
+              className="border px-3 py-2 rounded"
+              title="Clear results"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {disList && (
-          <div className="max-h-48 overflow-auto mt-2 border rounded">
+          <div className="max-h-52 overflow-auto mt-2 border rounded divide-y">
             {disList.map((d, i) => {
-              const name = typeof d === "string" ? d : d.name || d.Url || d.url || "";
-              const url  = typeof d === "string" ? d : d.url || d.Url || d.PXPURL || d.PortalUrl || d.name || "";
+              // support objects like {name,url} or strings (url)
+              const name = typeof d === "string" ? d : d.name || d.Url || d.url || d.PortalName || "";
+              const url =
+                typeof d === "string"
+                  ? d
+                  : d.url || d.Url || d.PXPURL || d.PortalUrl || d.name || "";
+
               return (
                 <button
                   key={i}
@@ -101,7 +137,7 @@ export default function Login() {
           value={districtUrl}
           onChange={(e) => setDistrictUrl(e.target.value)}
           placeholder="District Portal URL (e.g., https://<district>.edupoint.com)"
-          className="border p-2 w-full"
+          className="border p-2 w-full rounded"
           autoComplete="url"
           required
         />
@@ -109,7 +145,7 @@ export default function Login() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Username"
-          className="border p-2 w-full"
+          className="border p-2 w-full rounded"
           autoComplete="username"
           required
         />
@@ -118,12 +154,32 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="border p-2 w-full"
+          className="border p-2 w-full rounded"
           autoComplete="current-password"
           required
         />
-        {err && <p className="text-red-600">{err}</p>}
-        <button disabled={loading} className="border px-4 py-2 w-full">
+
+        {err && (
+          <div className="text-red-700 bg-red-50 border border-red-200 rounded p-2 text-sm">
+            {err}
+            {showSsoTips && (
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li>Confirm this is the exact StudentVUE portal URL for your district.</li>
+                <li>
+                  If the portal login page shows “Sign in with Google/Microsoft,” the district requires SSO and
+                  password login via API isn’t supported.
+                </li>
+                <li>If you still can’t log in on the district portal, the account may need activation or a reset.</li>
+              </ul>
+            )}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="border px-4 py-2 rounded w-full disabled:opacity-60"
+        >
           {loading ? "Logging in…" : "Log in"}
         </button>
       </form>
