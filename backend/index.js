@@ -3,176 +3,195 @@ import cors from "cors";
 import helmet from "helmet";
 import session from "express-session";
 import dotenv from "dotenv";
-import StudentVue from "studentvue";
+import bcrypt from "bcryptjs";
+import db, { newId } from "./db.js";
 
 dotenv.config();
 const app = express();
 
-// ────────────────────────────────────────────────────────────
-// Middleware
-// ────────────────────────────────────────────────────────────
+// middleware
 app.use(helmet());
 app.use(express.json());
-app.use(
-  cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  credentials: true,
+}));
+app.use(session({
+  name: "gradeify.sid",
+  secret: process.env.SESSION_SECRET || "dev-secret-change-me",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, sameSite: "lax", secure: false }
+}));
 
-app.use(
-  session({
-    name: "gradeify.sid",
-    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax", // in prod + cross-site, use: sameSite: "none", secure: true
-      secure: false,
-    },
-  })
-);
-
-// ────────────────────────────────────────────────────────────
-function ensureLogin(req, res, next) {
-  if (!req.session?.sv) return res.status(401).json({ error: "Not logged in" });
+function requireUser(req, res, next) {
+  if (!req.session?.userId) return res.status(401).json({ error: "Not logged in" });
   next();
 }
 
-function normalizeDistrictUrl(url = "") {
-  return url
-    .trim()
-    .replace(/^http(s)?:\/\//i, (m) => m.toLowerCase()) // normalize scheme case
-    .replace(/\/PXP2_Login_Student\.aspx.*/i, "")
-    .replace(/\/$/, "");
-}
+/* =============== AUTH (username + password only) =============== */
 
-function addHttpsIfMissing(url = "") {
-  if (!/^https?:\/\//i.test(url)) return "https://" + url;
-  return url;
-}
-
-// ────────────────────────────────────────────────────────────
-// SSO preflight: check portal login page for Google/Microsoft SSO
-// (Node 18+ has global fetch; we use a short timeout via AbortController.)
-// ────────────────────────────────────────────────────────────
-async function portalIndicatesSSO(baseUrl) {
+// POST /auth/register  { username, password }
+app.post("/auth/register", async (req, res) => {
   try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 6000);
-    const loginUrl =
-      addHttpsIfMissing(baseUrl.replace(/\/+$/, "")) + "/PXP2_Login_Student.aspx";
-    const resp = await fetch(loginUrl, { method: "GET", signal: controller.signal });
-    clearTimeout(t);
-    const html = await resp.text();
-    return /Login With Google|Sign in with Google|Login With Microsoft|Sign in with Microsoft/i.test(
-      html
-    );
-  } catch {
-    // If preflight fails (network), do not block; we’ll still try API login.
-    return false;
-  }
-}
-
-// ────────────────────────────────────────────────────────────
-// LOGIN
-// ────────────────────────────────────────────────────────────
-app.post("/api/login", async (req, res) => {
-  try {
-    const { districtUrl, username, password } = req.body || {};
-    let url = normalizeDistrictUrl(districtUrl || process.env.DISTRICT_URL);
-    if (!url) return res.status(400).json({ error: "Missing districtUrl" });
-    if (!username || !password) return res.status(400).json({ error: "Missing credentials" });
-
-    // Optional: early SSO guard for better UX
-    if (await portalIndicatesSSO(url)) {
-      return res.status(400).json({
-        error:
-          "This district’s portal appears to require single sign-on (Google/Microsoft). " +
-          "Password login via API isn’t supported. Please use the portal directly.",
-      });
+    const { username = "", password = "" } = req.body || {};
+    const uname = username.trim();
+    if (!uname || !password) {
+      return res.status(400).json({ error: "Username and password are required." });
     }
+    const exists = db.prepare("SELECT 1 FROM users WHERE lower(username) = ?")
+      .get(uname.toLowerCase());
+    if (exists) return res.status(409).json({ error: "Username already in use." });
 
-    // Modern studentvue signature: (districtUrl, { username, password })
-    console.log("🔐 StudentVUE login:", url);
-    await StudentVue.login(url, { username, password });
+    const hash = await bcrypt.hash(password, 12);
+    const id = newId();
+    db.prepare(`
+      INSERT INTO users (id, username, password_hash, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(id, uname, hash, new Date().toISOString());
 
-    req.session.sv = { url, username, password };
-    req.session.save((err) =>
-      err ? res.status(500).json({ error: "Session error" }) : res.json({ ok: true })
-    );
+    req.session.userId = id;
+    res.json({ ok: true, user: { id, username: uname } });
   } catch (e) {
-    const raw = String(e?.message || "");
-    let friendly = raw;
-
-    // Friendlier mapping for common district errors
-    if (/D21\d{2}/i.test(raw) || /critical error has occurred/i.test(raw)) {
-      friendly =
-        "The district’s StudentVUE server returned a critical error. " +
-        "This often happens if the portal requires Google/Microsoft login, the portal URL is wrong, " +
-        "or the account needs activation/reset.";
-    } else if (/invalid|password|username|unauthorized/i.test(raw)) {
-      friendly = "Invalid username or password for this portal.";
-    }
-
-    console.error("❌ StudentVUE login failed:", raw);
-    res.status(401).json({ error: friendly, raw });
+    res.status(500).json({ error: e.message || "Registration failed" });
   }
 });
 
-// ────────────────────────────────────────────────────────────
-// Helpers to rehydrate a live client using session creds
-// ────────────────────────────────────────────────────────────
-async function getClient(req) {
-  const s = req.session.sv;
-  if (!s) throw new Error("No session");
-  return StudentVue.login(s.url, { username: s.username, password: s.password });
-}
-
-// ────────────────────────────────────────────────────────────
-// Gradebook
-// ────────────────────────────────────────────────────────────
-app.get("/api/gradebook", ensureLogin, async (req, res) => {
+// POST /auth/login  { username, password }
+app.post("/auth/login", async (req, res) => {
   try {
-    const client = await getClient(req);
-    const data = await client.getGradebook();
-    res.json({ ok: true, data });
+    const { username = "", password = "" } = req.body || {};
+    const uname = username.trim().toLowerCase();
+    if (!uname || !password) return res.status(400).json({ error: "Missing credentials." });
+
+    const user = db.prepare("SELECT * FROM users WHERE lower(username) = ?").get(uname);
+    if (!user) return res.status(401).json({ error: "Invalid credentials." });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: "Invalid credentials." });
+
+    req.session.userId = user.id;
+    res.json({ ok: true, user: { id: user.id, username: user.username } });
   } catch (e) {
-    console.error("❌ Gradebook fetch failed:", e.message);
-    res.status(500).json({ error: e.message || "Failed to fetch gradebook" });
+    res.status(500).json({ error: e.message || "Login failed" });
   }
 });
 
-// ────────────────────────────────────────────────────────────
-app.get("/api/attendance", ensureLogin, async (req, res) => {
-  try {
-    const client = await getClient(req);
-    const data = await client.getAttendance();
-    res.json({ ok: true, data });
-  } catch (e) {
-    console.error("❌ Attendance fetch failed:", e.message);
-    res.status(500).json({ error: e.message || "Failed to fetch attendance" });
-  }
+app.post("/auth/logout", (req, res) => req.session.destroy(() => res.json({ ok: true })));
+
+app.get("/auth/me", (req, res) => {
+  if (!req.session?.userId) return res.json({ ok: true, user: null });
+  const user = db.prepare("SELECT id, username, created_at FROM users WHERE id = ?")
+    .get(req.session.userId);
+  res.json({ ok: true, user: user || null });
 });
 
-// ────────────────────────────────────────────────────────────
-// District lookup (if supported by the library in your env)
-// ────────────────────────────────────────────────────────────
-app.get("/api/districts", async (req, res) => {
-  try {
-    const zip = String(req.query.zip || "").trim();
-    if (!zip) return res.status(400).json({ error: "Missing ?zip=" });
-    const list = await StudentVue.getDistrictUrls(zip);
-    res.json({ ok: true, list });
-  } catch (e) {
-    res.status(400).json({ error: e.message || "District lookup failed" });
-  }
+/* ========================= CLASSES (CRUD) ========================= */
+app.get("/me/classes", requireUser, (req, res) => {
+  const rows = db.prepare("SELECT * FROM classes WHERE user_id = ? ORDER BY period, name")
+    .all(req.session.userId);
+  res.json({ ok: true, classes: rows });
 });
 
-// ────────────────────────────────────────────────────────────
-app.post("/api/logout", (req, res) => req.session.destroy(() => res.json({ ok: true })));
+app.post("/me/classes", requireUser, (req, res) => {
+  const { name = "", period = null, teacher = null, weight = null } = req.body || {};
+  if (!name.trim()) return res.status(400).json({ error: "Class name is required." });
+  const id = newId();
+  db.prepare(`
+    INSERT INTO classes (id, user_id, name, period, teacher, weight, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.session.userId, name.trim(), period, teacher, weight, new Date().toISOString());
+  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
+  res.json({ ok: true, class: row });
+});
 
-// ────────────────────────────────────────────────────────────
+app.put("/me/classes/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const { name, period, teacher, weight } = req.body || {};
+  const exists = db.prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Class not found." });
+
+  db.prepare(`
+    UPDATE classes SET
+      name = COALESCE(?, name),
+      period = COALESCE(?, period),
+      teacher = COALESCE(?, teacher),
+      weight = COALESCE(?, weight)
+    WHERE id = ? AND user_id = ?
+  `).run(name?.trim() ?? null, period ?? null, teacher ?? null, weight ?? null, id, req.session.userId);
+
+  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
+  res.json({ ok: true, class: row });
+});
+
+app.delete("/me/classes/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const exists = db.prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Class not found." });
+  db.prepare("DELETE FROM classes WHERE id = ? AND user_id = ?").run(id, req.session.userId);
+  db.prepare("DELETE FROM grades WHERE class_id = ? AND user_id = ?").run(id, req.session.userId);
+  res.json({ ok: true });
+});
+
+/* ========================== GRADES (CRUD) ========================= */
+app.get("/me/classes/:classId/grades", requireUser, (req, res) => {
+  const { classId } = req.params;
+  const rows = db.prepare("SELECT * FROM grades WHERE class_id = ? AND user_id = ? ORDER BY due_date")
+    .all(classId, req.session.userId);
+  res.json({ ok: true, grades: rows });
+});
+
+app.post("/me/classes/:classId/grades", requireUser, (req, res) => {
+  const { classId } = req.params;
+  const { title = "", points_earned, points_possible, category = null, due_date = null } = req.body || {};
+  if (!title.trim()) return res.status(400).json({ error: "Title is required." });
+  if (points_earned == null || points_possible == null) {
+    return res.status(400).json({ error: "Points earned/possible are required." });
+  }
+  const classExists = db.prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
+    .get(classId, req.session.userId);
+  if (!classExists) return res.status(404).json({ error: "Class not found." });
+
+  const id = newId();
+  db.prepare(`
+    INSERT INTO grades (id, user_id, class_id, title, points_earned, points_possible, category, due_date, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.session.userId, classId, title.trim(), +points_earned, +points_possible, category, due_date, new Date().toISOString());
+  const row = db.prepare("SELECT * FROM grades WHERE id = ?").get(id);
+  res.json({ ok: true, grade: row });
+});
+
+app.put("/me/grades/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const { title, points_earned, points_possible, category, due_date } = req.body || {};
+  const exists = db.prepare("SELECT 1 FROM grades WHERE id = ? AND user_id = ?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Grade not found." });
+
+  db.prepare(`
+    UPDATE grades SET
+      title = COALESCE(?, title),
+      points_earned = COALESCE(?, points_earned),
+      points_possible = COALESCE(?, points_possible),
+      category = COALESCE(?, category),
+      due_date = COALESCE(?, due_date)
+    WHERE id = ? AND user_id = ?
+  `).run(title?.trim() ?? null, points_earned ?? null, points_possible ?? null, category ?? null, due_date ?? null, id, req.session.userId);
+
+  const row = db.prepare("SELECT * FROM grades WHERE id = ?").get(id);
+  res.json({ ok: true, grade: row });
+});
+
+app.delete("/me/grades/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const exists = db.prepare("SELECT 1 FROM grades WHERE id = ? AND user_id = ?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Grade not found." });
+  db.prepare("DELETE FROM grades WHERE id = ? AND user_id = ?").run(id, req.session.userId);
+  res.json({ ok: true });
+});
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
