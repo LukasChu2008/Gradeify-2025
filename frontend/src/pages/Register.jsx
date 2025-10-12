@@ -26,26 +26,34 @@ export default function Register() {
   return (
     <div className="login-page">
       <h1 className="title">Join Gradeify ✨</h1>
-      <p className="subtitle">Make tracking your grades a breeze 🌸</p>
+      <p className="subtitle">Stay on top of your classes with ease!</p>
 
       <form onSubmit={onSubmit} className="login-form">
-        <input
-          placeholder="Choose a username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <input
-          placeholder="Create a password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <div className="form-group">
+          <label>Username</label>
+          <input
+            type="text"
+            placeholder="Choose a username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            placeholder="Create a password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
         {err && <p className="error-text">{err}</p>}
-        <button disabled={loading}>
-          {loading ? "Creating…" : "Create account"}
-        </button>
+
+        <button disabled={loading}>{loading ? "Creating…" : "Create account"}</button>
       </form>
 
       <p className="switch-link">

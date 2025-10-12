@@ -26,30 +26,38 @@ export default function AuthLogin() {
   return (
     <div className="login-page">
       <h1 className="title">Gradeify ☕</h1>
-      <p className="subtitle">Welcome back! Let’s get you studying 🎧</p>
+      <p className="subtitle">Track your classes, grades, and study smarter!</p>
 
       <form onSubmit={onSubmit} className="login-form">
-        <input
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <input
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <div className="form-group">
+          <label>Username</label>
+          <input
+            type="text"
+            placeholder="Enter your username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
         {err && <p className="error-text">{err}</p>}
-        <button disabled={loading}>
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
+
+        <button disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
       </form>
 
       <p className="switch-link">
-        No account? <Link to="/register" className="link">Create one</Link>
+        No account yet? <Link to="/register" className="link">Create one</Link>
       </p>
     </div>
   );
