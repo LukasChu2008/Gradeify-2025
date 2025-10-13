@@ -199,7 +199,7 @@ export default function ManualDashboard() {
               <div className="weights">
                 <div className="weights-list">
                   {categories.length === 0 ? (
-                    <div className="muted">No categories yet — add some below (they can sum to 100 later).</div>
+                    <div className="muted">No categories yet — add some below (They can sum to 100 later).</div>
                   ) : (
                     categories.map(c => (
                       <div key={c.id} className="row">
@@ -270,7 +270,7 @@ export default function ManualDashboard() {
               <input className="input" placeholder="Earned" value={ge} onChange={e => setGe(e.target.value)} inputMode="decimal" required />
               <input className="input" placeholder="Possible" value={gp} onChange={e => setGp(e.target.value)} inputMode="decimal" required />
               <select className="input" value={gcat} onChange={e => setGcat(e.target.value)}>
-                <option value="">— category —</option>
+                <option value="">— Category —</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
