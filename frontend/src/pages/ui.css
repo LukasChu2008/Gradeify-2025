@@ -1,11 +1,11 @@
 :root {
-  --bg: #0b0f14;
-  --card: #121821;
+  --bg: #161415;
+  --card: #9a83ed;
   --line: #1e293b;
   --muted: #cbd5e1;
-  --text: #e5e7eb;
+  --text: #000000;
   --accent: #60a5fa;
-  --danger: #f87171;
+  --danger: #f90000;
   --ok: #34d399;
 }
 
@@ -24,7 +24,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 syst
 .btn { background: transparent; border: 1px solid var(--line); color: var(--text); padding: 8px 12px; border-radius: 10px; cursor: pointer; }
 .btn:hover { border-color: var(--accent); }
 
-.input { background:#0f1520; border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:10px; width:100%; }
+.input { background:#ffffff; border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:10px; width:100%; }
 .input::placeholder { color:#6b7280; }
 
 .muted { color: var(--muted); }
@@ -39,7 +39,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 syst
 .mt { margin-top: 12px; }
 
 .pills { display:flex; flex-wrap:wrap; gap:8px; }
-.pill { padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:#0f1520; color:var(--text); cursor:pointer; }
+.pill { padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:#ffffff; color:var(--text); cursor:pointer; }
 .pill.active, .pill:hover { border-color: var(--accent); }
 
 .table, .cat-table { display:grid; gap:6px; }

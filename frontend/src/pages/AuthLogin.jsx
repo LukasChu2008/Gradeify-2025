@@ -25,7 +25,7 @@ export default function AuthLogin() {
 
   return (
     <div className="login-page">
-      <h1 className="title">Gradeify ☕</h1>
+      <h1 className="title">Gradeify</h1>
       <p className="subtitle">Track your classes, grades, and study smarter!</p>
 
       <form onSubmit={onSubmit} className="login-form">

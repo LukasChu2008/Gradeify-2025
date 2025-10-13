@@ -25,7 +25,7 @@ export default function Register() {
 
   return (
     <div className="login-page">
-      <h1 className="title">Join Gradeify ✨</h1>
+      <h1 className="title">Join Gradeify</h1>
       <p className="subtitle">Stay on top of your classes with ease!</p>
 
       <form onSubmit={onSubmit} className="login-form">
