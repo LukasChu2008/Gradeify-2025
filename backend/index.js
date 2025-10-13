@@ -29,9 +29,9 @@ function requireUser(req, res, next) {
   next();
 }
 
-/* =============== AUTH (username + password only) =============== */
+// LOGIN or register WITH USERNAME/PASSWORD
 
-// POST /auth/register  { username, password }
+//register
 app.post("/auth/register", async (req, res) => {
   try {
     const { username = "", password = "" } = req.body || {};
@@ -57,7 +57,7 @@ app.post("/auth/register", async (req, res) => {
   }
 });
 
-// POST /auth/login  { username, password }
+//login
 app.post("/auth/login", async (req, res) => {
   try {
     const { username = "", password = "" } = req.body || {};

@@ -215,7 +215,7 @@ export default function ManualDashboard() {
                   <div className="progress-bar" style={{ width: `${Math.min(sumWeights, 100)}%` }} />
                 </div>
                 <div className={`muted ${sumWeights === 100 ? "ok" : ""}`}>
-                  Total weights: {sumWeights}% {sumWeights !== 100 && "(they’ll be normalized until you hit 100%)"}
+                  Total weights: {sumWeights}% {sumWeights !== 100 && "(They’ll be normalized until you hit 100%)"}
                 </div>
               </div>
 
