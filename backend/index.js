@@ -277,17 +277,18 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     byCat.set(key, cur);
   }
 
-  // Map categories to weights
+  // Map categories to weights and compute per-category percent (or null if no points)
   let sumWeights = 0;
   const catRows = cats.map(c => {
-    sumWeights += Number(c.weight_percent) || 0;
+    const w = Number(c.weight_percent) || 0;
+    sumWeights += w;
     const key = c.name.trim().toLowerCase();
     const agg = byCat.get(key) || { earned: 0, possible: 0, name: c.name };
     const pct = agg.possible > 0 ? (agg.earned / agg.possible) * 100 : null;
     return {
       id: c.id,
       name: c.name,
-      weight_percent: Number(c.weight_percent),
+      weight_percent: w,
       earned: agg.earned,
       possible: agg.possible,
       percent: pct
@@ -299,26 +300,44 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     const already = catRows.find(r => r.name.trim().toLowerCase() === key);
     if (!already) {
       catRows.push({
-        id: null, name: agg.name, weight_percent: 0,
-        earned: agg.earned, possible: agg.possible,
+        id: null,
+        name: agg.name,
+        weight_percent: 0,
+        earned: agg.earned,
+        possible: agg.possible,
         percent: agg.possible > 0 ? (agg.earned / agg.possible) * 100 : null
       });
     }
   }
 
-  // Compute overall: weighted average of category percents (ignore any 0-weight)
+  // Compute overall: weighted average of category percents,
+  // but rescale using only the weights for categories that actually have a percent.
   let overall = null;
   if (sumWeights > 0) {
     let acc = 0;
+    // accumulate numerator (percent * weight) only for categories that have a percent
     for (const c of catRows) {
       if (c.weight_percent > 0 && c.percent != null) {
         acc += (c.percent * c.weight_percent) / 100;
       }
     }
-    // If weights don't sum to 100, scale by (sumWeights / 100) so users can partially set them.
-    overall = acc * (100 / sumWeights);
+
+    // effectiveWeightSum = sum of weights for categories that had percent != null
+    const effectiveWeightSum = catRows
+      .filter(c => c.weight_percent > 0 && c.percent != null)
+      .reduce((s, c) => s + c.weight_percent, 0);
+
+    if (effectiveWeightSum > 0) {
+      // scale by the effective (non-empty) weights only
+      overall = acc * (100 / effectiveWeightSum);
+    } else {
+      // No categories with both weight > 0 and actual grades -> fall back to straight points
+      const totalEarned = grades.reduce((a, g) => a + (+g.points_earned || 0), 0);
+      const totalPossible = grades.reduce((a, g) => a + (+g.points_possible || 0), 0);
+      overall = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
+    }
   } else {
-    // No weights: fall back to straight points across all grades
+    // No weights defined anywhere: fall back to straight points across all grades
     const totalEarned = grades.reduce((a, g) => a + (+g.points_earned || 0), 0);
     const totalPossible = grades.reduce((a, g) => a + (+g.points_possible || 0), 0);
     overall = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
