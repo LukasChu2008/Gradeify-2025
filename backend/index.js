@@ -351,6 +351,39 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
   });
 });
 
+// ====== UPDATE GRADE ======
+app.put("/me/grades/:id", requireUser, (req, res) => {
+  const { id } = req.params;
+  const { title, points_earned, points_possible, category, due_date } = req.body || {};
+
+  const exists = db.prepare("SELECT 1 FROM grades WHERE id = ? AND user_id = ?")
+    .get(id, req.session.userId);
+  if (!exists) return res.status(404).json({ error: "Grade not found." });
+
+  // Update only the fields provided, leave others unchanged
+  db.prepare(`
+    UPDATE grades SET
+      title = COALESCE(?, title),
+      points_earned = COALESCE(?, points_earned),
+      points_possible = COALESCE(?, points_possible),
+      category = COALESCE(?, category),
+      due_date = COALESCE(?, due_date)
+    WHERE id = ? AND user_id = ?
+  `).run(
+    title?.trim() ?? null,
+    points_earned != null ? Number(points_earned) : null,
+    points_possible != null ? Number(points_possible) : null,
+    category ?? null,
+    due_date ?? null,
+    id,
+    req.session.userId
+  );
+
+  const row = db.prepare("SELECT * FROM grades WHERE id = ?").get(id);
+  res.json({ ok: true, grade: row });
+});
+
+
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
