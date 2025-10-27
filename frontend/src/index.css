@@ -13,9 +13,21 @@ code {
     monospace;
 }
 
-/* Global pastel gradient to kill the black background */
-html, body, #root {
-  margin: 0;
+/* ---- App background: respect theme ---- */
+
+/* Light mode: keep your pastel gradient */
+:root:not([data-theme="dark"]) html,
+:root:not([data-theme="dark"]) body,
+:root:not([data-theme="dark"]) #root {
   height: 100%;
-  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe) !important;
+  background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
+}
+
+/* Dark mode: solid dark (or swap for your dark gradient) */
+:root[data-theme="dark"] html,
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] #root {
+  height: 100%;
+  background: #0d111a;            /* or: linear-gradient(135deg,#0b1020,#0d1326) */
+  background-image: none;
 }

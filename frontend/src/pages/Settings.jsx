@@ -1,164 +1,278 @@
-import { useState, useEffect } from "react";
+// src/pages/Settings.jsx
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./ui.css"; // reuse your base theme
+import "./ui.css";
+import {
+  getSettings,
+  savePreferences,
+  updateUsername,
+  updatePassword,
+} from "../api/userApi";
+
+/* Small helper to apply theme to <html> immediately */
+function applyTheme(theme) {
+  const t = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("gradeify_theme", t); } catch {}
+}
 
 export default function SettingsPage() {
   const nav = useNavigate();
 
-  const [theme, setTheme] = useState("light");
-  const [textScale, setTextScale] = useState(1);
-  const [highContrast, setHighContrast] = useState(false);
+  // status
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
 
-  // load saved preferences
+  // prefs
+  const [theme, setTheme] = useState("light");
+
+  // profile
+  const [username, setUsername] = useState("");     // current
+  const [newUsername, setNewUsername] = useState(""); // input
+
+  // password
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+
+  // Prevent page jumps: memoized empty spacer for status row height
+  const STATUS_HEIGHT = 44;
+  const StatusRow = useMemo(
+    () => (
+      <div
+        style={{
+          height: STATUS_HEIGHT,
+          margin: "0 auto 1rem auto",
+          maxWidth: 900,
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        {err ? (
+          <div className="alert" style={{ width: "100%" }}>{err}</div>
+        ) : msg ? (
+          <div
+            className="alert"
+            style={{
+              width: "100%",
+              color: "#155724",
+              background: "#d4edda",
+              borderColor: "#c3e6cb",
+            }}
+          >
+            {msg}
+          </div>
+        ) : null}
+      </div>
+    ),
+    [err, msg]
+  );
+
   useEffect(() => {
-    const prefs = JSON.parse(localStorage.getItem("userPrefs") || "{}");
-    if (prefs.theme) setTheme(prefs.theme);
-    if (prefs.textScale) setTextScale(prefs.textScale);
-    if (prefs.highContrast) setHighContrast(prefs.highContrast);
+    // Apply any saved theme before first paint to avoid flicker
+    try {
+      const stored = localStorage.getItem("gradeify_theme");
+      if (stored === "dark" || stored === "light") {
+        applyTheme(stored);
+        setTheme(stored);
+      }
+    } catch {}
   }, []);
 
-  // save when values change
   useEffect(() => {
-    localStorage.setItem(
-      "userPrefs",
-      JSON.stringify({ theme, textScale, highContrast })
-    );
-  }, [theme, textScale, highContrast]);
+    (async () => {
+      try {
+        setErr(""); setMsg("");
+        const data = await getSettings();
+        const p = data?.preferences || {};
+        const prof = data?.profile || {};
+        const t = p.theme || "light";
+        setTheme(t);
+        applyTheme(t);
+        setUsername(prof.username || "");
+      } catch (e) {
+        setErr(e.message || "Failed to load settings.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  function handleBack() {
-    nav("/manual");
+  async function onSaveTheme(e) {
+    e.preventDefault();
+    setErr(""); setMsg("");
+    try {
+      const t = theme === "dark" ? "dark" : "light";
+      await savePreferences({ theme: t });
+      applyTheme(t); // immediate
+      setMsg("Theme saved.");
+    } catch (e) {
+      setErr(e.message || "Failed to save theme.");
+    }
   }
+
+  async function onSaveUsername(e) {
+    e.preventDefault(); // prevent page reload → avoids jump
+    setErr(""); setMsg("");
+    try {
+      const u = (newUsername || "").trim();
+      if (!u) throw new Error("New username cannot be empty.");
+      await updateUsername({ newUsername: u });
+      setUsername(u);
+      setNewUsername("");
+      setMsg("Username changed.");
+    } catch (e) {
+      setErr(e.message || "Failed to change username.");
+    }
+  }
+
+  async function onChangePassword(e) {
+    e.preventDefault(); // prevent page reload → avoids jump
+    setErr(""); setMsg("");
+    try {
+      if (newPassword !== confirmPw) throw new Error("New passwords do not match.");
+      if (!newPassword || newPassword.length < 8) {
+        throw new Error("Password must be at least 8 characters.");
+      }
+      await updatePassword({ currentPassword, newPassword });
+      setCurrentPassword(""); setNewPassword(""); setConfirmPw("");
+      setMsg("Password updated.");
+    } catch (e) {
+      setErr(e.message || "Failed to change password.");
+    }
+  }
+
+  // Minimal consistent card wrapper
+  const Card = ({ title, children }) => (
+    <section className="card" style={{ borderRadius: 16 }}>
+      <div className="card-title" style={{ marginTop: 0 }}>{title}</div>
+      {children}
+    </section>
+  );
+
+  if (loading) return <div className="page" style={{ padding: "2rem" }}>
+Loading…</div>;
 
   return (
     <div
+      className="page"
       style={{
         minHeight: "100vh",
         padding: "2rem",
-        background:
-          theme === "dark"
-            ? "linear-gradient(180deg, #1c1f2b, #2e3350)"
-            : "linear-gradient(180deg, #f5f7ff, #e1e6ff)",
-        color: theme === "dark" ? "#eee" : "#222",
-        transition: "background 0.3s ease",
       }}
     >
+      {/* Top bar */}
       <div
         style={{
-          maxWidth: 700,
-          margin: "0 auto",
-          background: theme === "dark" ? "#2b2f45" : "white",
-          borderRadius: 20,
-          padding: "2rem 2.5rem",
-          boxShadow:
-            theme === "dark"
-              ? "0 4px 16px rgba(0,0,0,0.5)"
-              : "0 4px 16px rgba(0,0,0,0.15)",
+          maxWidth: 900,
+          margin: "0 auto 1rem auto",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1.5rem",
-          }}
-        >
-          <h1 style={{ fontSize: "1.8rem", margin: 0, color: "#5a4afc" }}>
-            Settings
-          </h1>
-          <button
-            onClick={handleBack}
-            className="btn"
-            style={{
-              background: "#5a4afc",
-              color: "white",
-              borderRadius: "8px",
-              border: "none",
-              padding: "0.5rem 1rem",
-              cursor: "pointer",
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
+        <h1 style={{ margin: 0, color: "#5b57f5" }}>Settings</h1>
+        <button className="btn" type="button" onClick={() => nav("/manual")}>
+          ← Back to Dashboard
+        </button>
+      </div>
 
-        {/* Appearance Section */}
-        <section style={{ marginBottom: "1.8rem" }}>
-          <h2 style={{ fontSize: "1.2rem", marginBottom: "0.8rem" }}>
-            Appearance
-          </h2>
+      {/* Fixed-height status area to prevent layout jumps while typing */}
+      {StatusRow}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <label style={{ fontWeight: 500 }}>Theme:</label>
+      <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: "1rem" }}>
+        {/* Theme */}
+        <Card title="Appearance">
+          <form className="grid3" onSubmit={onSaveTheme}>
+            <label className="muted">Theme</label>
             <select
               className="input"
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
-              style={{
-                padding: "0.4rem 0.7rem",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                background: "white",
-              }}
             >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
-          </div>
-        </section>
+            <div />
+            <div />
+            <div style={{ textAlign: "right" }}>
+              <button className="btn" type="submit">Save Theme</button>
+            </div>
+          </form>
+        </Card>
 
-        {/* Text Size */}
-        <section style={{ marginBottom: "1.8rem" }}>
-          <h2 style={{ fontSize: "1.2rem", marginBottom: "0.8rem" }}>
-            Text Size
-          </h2>
-          <input
-            type="range"
-            min="0.8"
-            max="1.5"
-            step="0.1"
-            value={textScale}
-            onChange={(e) => setTextScale(Number(e.target.value))}
-            style={{ width: "100%" }}
-          />
-          <div style={{ fontSize: `${textScale}rem`, marginTop: "0.6rem" }}>
-            Preview text size
+        {/* Username */}
+        <Card title="Change Username">
+          <div className="muted" style={{ marginBottom: 8 }}>
+            Current: <b>{username}</b>
           </div>
-        </section>
-
-        {/* Accessibility */}
-        <section>
-          <h2 style={{ fontSize: "1.2rem", marginBottom: "0.8rem" }}>
-            Accessibility
-          </h2>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <form className="grid3" onSubmit={onSaveUsername} noValidate>
+            <label className="muted" htmlFor="new-username">New username</label>
             <input
-              type="checkbox"
-              checked={highContrast}
-              onChange={() => setHighContrast(!highContrast)}
+              id="new-username"
+              className="input"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="New username"
+              autoComplete="username"
+              required
             />
-            Enable high contrast mode
-          </label>
-        </section>
+            <div />
+            <div />
+            <div style={{ textAlign: "right" }}>
+              {/* Explicit type to avoid accidental submits */}
+              <button className="btn" type="submit">Change Username</button>
+            </div>
+          </form>
+        </Card>
 
-        {/* Save Button */}
-        <div style={{ marginTop: "2rem", textAlign: "right" }}>
-          <button
-            onClick={() => alert("Preferences saved!")}
-            className="btn"
-            style={{
-              background: "#5a4afc",
-              color: "white",
-              borderRadius: "8px",
-              border: "none",
-              padding: "0.6rem 1.2rem",
-              cursor: "pointer",
-            }}
-          >
-            Save Changes
-          </button>
-        </div>
+        {/* Password */}
+        <Card title="Change Password">
+          <form className="grid3" onSubmit={onChangePassword} noValidate>
+            <label className="muted" htmlFor="cur-pw">Current password</label>
+            <input
+              id="cur-pw"
+              className="input"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            <div />
+
+            <label className="muted" htmlFor="new-pw">New password</label>
+            <input
+              id="new-pw"
+              className="input"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+            <div />
+
+            <label className="muted" htmlFor="confirm-pw">Confirm new password</label>
+            <input
+              id="confirm-pw"
+              className="input"
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+            <div />
+
+            <div />
+            <div style={{ textAlign: "right" }}>
+              <button className="btn" type="submit">Update Password</button>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
   );

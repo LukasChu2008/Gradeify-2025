@@ -34,6 +34,75 @@ function requireUser(req, res, next) {
   next();
 }
 
+/* ===================== SETTINGS & PROFILE (/me/*) ===================== */
+
+// Return profile + preferences
+app.get("/me/settings", requireUser, (req, res) => {
+  const u = db.prepare("SELECT username, display_name, preferences FROM users WHERE id = ?")
+    .get(req.session.userId);
+  const prefs = u?.preferences ? JSON.parse(u.preferences) : {};
+  res.json({
+    ok: true,
+    profile: { username: u?.username || "", displayName: u?.display_name || "" },
+    preferences: { theme: prefs.theme || "light" }
+  });
+});
+
+// Update preferences (theme only)
+app.patch("/me/preferences", requireUser, (req, res) => {
+  const { theme } = req.body || {};
+  const cur = db.prepare("SELECT preferences FROM users WHERE id = ?").get(req.session.userId);
+  const prev = cur?.preferences ? JSON.parse(cur.preferences) : {};
+  const merged = { ...prev, theme: theme || "light" };
+  db.prepare("UPDATE users SET preferences = ? WHERE id = ?")
+    .run(JSON.stringify(merged), req.session.userId);
+  res.json({ ok: true, preferences: merged });
+});
+
+// Update display name
+app.patch("/me/profile", requireUser, (req, res) => {
+  const { displayName = "" } = req.body || {};
+  db.prepare("UPDATE users SET display_name = ? WHERE id = ?")
+    .run(displayName.trim(), req.session.userId);
+  res.json({ ok: true, displayName: displayName.trim() });
+});
+
+// Change username (checks uniqueness, case-insensitive)
+app.patch("/me/username", requireUser, (req, res) => {
+  const { newUsername = "" } = req.body || {};
+  const uname = newUsername.trim();
+  if (!uname) return res.status(400).json({ error: "Username cannot be empty." });
+
+  const exists = db.prepare("SELECT 1 FROM users WHERE lower(username) = ? AND id != ?")
+    .get(uname.toLowerCase(), req.session.userId);
+  if (exists) return res.status(409).json({ error: "Username already in use." });
+
+  db.prepare("UPDATE users SET username = ? WHERE id = ?").run(uname, req.session.userId);
+  res.json({ ok: true, username: uname });
+});
+
+// Change password (verify current)
+app.patch("/me/password", requireUser, async (req, res) => {
+  try {
+    const { currentPassword = "", newPassword = "" } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
+    const user = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.session.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) return res.status(403).json({ error: "Incorrect password" });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, req.session.userId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Password change failed" });
+  }
+});
+
+
 /* -------------------- AUTH: register / login / me -------------------- */
 
 // Register

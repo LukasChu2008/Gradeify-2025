@@ -8,7 +8,7 @@ import ManualDashboard from "./pages/ManualDashboard.jsx";
 import SettingsPage from "./pages/Settings.jsx";
 import "./App.css";
 
-/* Error boundary lives inside the Router (Router is provided by index.jsx) */
+/* ---------------- ErrorBoundary ---------------- */
 function ErrorBoundary({ children }) {
   const [err, setErr] = useState(null);
   const location = useLocation();
@@ -23,10 +23,9 @@ function ErrorBoundary({ children }) {
     };
   }, []);
 
-  // clear any captured error on route change
   useEffect(() => {
     if (err) setErr(null);
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   if (err) {
     return (
@@ -57,7 +56,21 @@ function ErrorBoundary({ children }) {
   return children;
 }
 
+/* ---------------- App ---------------- */
 export default function App() {
+  const location = useLocation();
+
+  // Force light mode on /login and /register; otherwise use saved theme.
+  useEffect(() => {
+    const forceLight = ["/login", "/register"].includes(location.pathname);
+    const saved =
+      localStorage.getItem("gradeify_theme") === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute(
+      "data-theme",
+      forceLight ? "light" : saved
+    );
+  }, [location.pathname]);
+
   return (
     <ErrorBoundary>
       <Routes>
