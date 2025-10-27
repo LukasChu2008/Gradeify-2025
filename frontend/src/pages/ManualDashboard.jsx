@@ -1,3 +1,4 @@
+// src/pages/ManualDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,7 +7,7 @@ import {
   listGrades, createGrade, deleteGrade,
   listCategories, createCategory, deleteCategory, getSummary, updateGrade
 } from "../api/manual";
-import "./ui.css"; // NEW styling (see file below)
+import "./ui.css";
 
 export default function ManualDashboard() {
   const nav = useNavigate();
@@ -36,31 +37,30 @@ export default function ManualDashboard() {
   const [loading, setLoading] = useState(true);
 
   const [editingGrade, setEditingGrade] = useState(null);
-const [editTitle, setEditTitle] = useState("");
-const [editEarned, setEditEarned] = useState("");
-const [editPossible, setEditPossible] = useState("");
-const [editCategory, setEditCategory] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editEarned, setEditEarned] = useState("");
+  const [editPossible, setEditPossible] = useState("");
+  const [editCategory, setEditCategory] = useState("");
 
-function startEdit(grade) {
-  setEditingGrade(grade);
-  setEditTitle(grade.title);
-  setEditEarned(grade.points_earned);
-  setEditPossible(grade.points_possible);
-  setEditCategory(grade.category || "");
-}
+  function startEdit(grade) {
+    setEditingGrade(grade);
+    setEditTitle(grade.title);
+    setEditEarned(grade.points_earned);
+    setEditPossible(grade.points_possible);
+    setEditCategory(grade.category || "");
+  }
 
-async function onSaveEdit(id) {
-  await updateGrade(id, {
-    title: editTitle.trim(),
-    points_earned: Number(editEarned),
-    points_possible: Number(editPossible),
-    category: editCategory.trim() || null,
-  });
-  setEditingGrade(null);
-  const cid = currentClassId();
-  await refreshClassData(cid);
-}
-
+  async function onSaveEdit(id) {
+    await updateGrade(id, {
+      title: editTitle.trim(),
+      points_earned: Number(editEarned),
+      points_possible: Number(editPossible),
+      category: editCategory.trim() || null,
+    });
+    setEditingGrade(null);
+    const cid = currentClassId();
+    await refreshClassData(cid);
+  }
 
   function currentClassId() {
     return sel?.id || classes[0]?.id || null;
@@ -179,7 +179,13 @@ async function onSaveEdit(id) {
       <header className="topbar">
         <div className="title">Gradeify</div>
         <div className="right">
-          {user && <span className="muted">Signed in as <b>{user.username}</b></span>}
+          {user && (
+            <span className="muted">
+              Signed in as <b>{user.username}</b>
+            </span>
+          )}
+          {/* Settings button added here */}
+          <button className="btn" onClick={() => nav("/settings")}>Settings</button>
           <button className="btn" onClick={onLogout}>Sign out</button>
         </div>
       </header>
@@ -314,67 +320,67 @@ async function onSaveEdit(id) {
                 <div>Category</div>
                 <div></div>
               </div>
+
               {grades.length === 0 ? (
-  <div className="muted mt">No grades yet.</div>
-) : (
-  grades.map(g => {
-    const pct = g.points_possible > 0 ? (g.points_earned / g.points_possible) * 100 : 0;
-    const isEditing = editingGrade?.id === g.id;
+                <div className="muted mt">No grades yet.</div>
+              ) : (
+                grades.map(g => {
+                  const pct = g.points_possible > 0 ? (g.points_earned / g.points_possible) * 100 : 0;
+                  const isEditing = editingGrade?.id === g.id;
 
-    return (
-      <div key={g.id} className="trow">
-        {isEditing ? (
-          <>
-            <input
-              className="input small"
-              value={editTitle}
-              onChange={e => setEditTitle(e.target.value)}
-            />
-            <input
-              className="input small"
-              value={editEarned}
-              onChange={e => setEditEarned(e.target.value)}
-              inputMode="decimal"
-            />
-            <input
-              className="input small"
-              value={editPossible}
-              onChange={e => setEditPossible(e.target.value)}
-              inputMode="decimal"
-            />
-            <select
-              className="input small"
-              value={editCategory}
-              onChange={e => setEditCategory(e.target.value)}
-            >
-              <option value="">— Category —</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
-            <div>
-              <button className="link" onClick={() => onSaveEdit(g.id)}>Save</button>
-              <button className="link-danger" onClick={() => setEditingGrade(null)}>Cancel</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div>{g.title}</div>
-            <div>{g.points_earned}</div>
-            <div>{g.points_possible}</div>
-            <div>{pct.toFixed(1)}%</div>
-            <div>{g.category || "—"}</div>
-            <div>
-              <button className="link" onClick={() => startEdit(g)}>Edit</button>
-              <button className="link-danger" onClick={() => onRemoveGrade(g.id)}>Remove</button>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  })
-)}
-
+                  return (
+                    <div key={g.id} className="trow">
+                      {isEditing ? (
+                        <>
+                          <input
+                            className="input small"
+                            value={editTitle}
+                            onChange={e => setEditTitle(e.target.value)}
+                          />
+                          <input
+                            className="input small"
+                            value={editEarned}
+                            onChange={e => setEditEarned(e.target.value)}
+                            inputMode="decimal"
+                          />
+                          <input
+                            className="input small"
+                            value={editPossible}
+                            onChange={e => setEditPossible(e.target.value)}
+                            inputMode="decimal"
+                          />
+                          <select
+                            className="input small"
+                            value={editCategory}
+                            onChange={e => setEditCategory(e.target.value)}
+                          >
+                            <option value="">— Category —</option>
+                            {categories.map(c => (
+                              <option key={c.id} value={c.name}>{c.name}</option>
+                            ))}
+                          </select>
+                          <div>
+                            <button className="link" onClick={() => onSaveEdit(g.id)}>Save</button>
+                            <button className="link-danger" onClick={() => setEditingGrade(null)}>Cancel</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>{g.title}</div>
+                          <div>{g.points_earned}</div>
+                          <div>{g.points_possible}</div>
+                          <div>{pct.toFixed(1)}%</div>
+                          <div>{g.category || "—"}</div>
+                          <div>
+                            <button className="link" onClick={() => startEdit(g)}>Edit</button>
+                            <button className="link-danger" onClick={() => onRemoveGrade(g.id)}>Remove</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </>
         )}

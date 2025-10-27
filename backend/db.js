@@ -7,85 +7,66 @@ import crypto from "crypto";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Open DB
 const db = new Database(path.join(__dirname, "gradeify.db"));
-
-// Pragmas
 db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-db.pragma("busy_timeout = 5000");
 
-/*
- Schema notes
- - We use UUID strings for primary keys (matches newId()).
- - users includes optional display_name and preferences (JSON string).
- - categories has a case-insensitive unique constraint per (user_id, class_id, name).
-*/
-
-// ----- USERS -----
+// make sure the base tables exist
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,             -- UUID (string)
-  username      TEXT UNIQUE NOT NULL,         -- case-insensitive uniqueness enforced in app logic
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  display_name  TEXT,
-  preferences   TEXT,                          -- JSON string of UI/accessibility prefs
-  created_at    TEXT NOT NULL
+  created_at TEXT NOT NULL
 );
-`);
-
-// ----- CLASSES -----
-db.exec(`
 CREATE TABLE IF NOT EXISTS classes (
-  id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL,
-  name       TEXT NOT NULL,
-  period     INTEGER,
-  teacher    TEXT,
-  weight     REAL,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  period INTEGER,
+  teacher TEXT,
+  weight REAL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-`);
-
-// ----- GRADES -----
-db.exec(`
 CREATE TABLE IF NOT EXISTS grades (
-  id              TEXT PRIMARY KEY,
-  user_id         TEXT NOT NULL,
-  class_id        TEXT NOT NULL,
-  title           TEXT NOT NULL,
-  points_earned   REAL NOT NULL,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  class_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  points_earned REAL NOT NULL,
   points_possible REAL NOT NULL,
-  category        TEXT,
-  due_date        TEXT,
-  created_at      TEXT NOT NULL,
-  FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
+  category TEXT,
+  due_date TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 );
-`);
-
-// ----- CATEGORIES -----
-db.exec(`
 CREATE TABLE IF NOT EXISTS categories (
-  id             TEXT PRIMARY KEY,
-  user_id        TEXT NOT NULL,
-  class_id       TEXT NOT NULL,
-  name           TEXT NOT NULL,
-  weight_percent REAL NOT NULL,  -- 1–100
-  created_at     TEXT NOT NULL,
-  FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  class_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  weight_percent REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 );
-`);
-
-// Case-insensitive uniqueness for category names per (user_id, class_id)
-db.exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_unique
 ON categories(user_id, class_id, name COLLATE NOCASE);
 `);
 
-// ID helper
+// --- make sure new columns exist on users ---
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT;`);
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) console.error(e);
+}
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN preferences TEXT;`);
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) console.error(e);
+}
+
 export function newId() {
   return crypto.randomUUID();
 }
