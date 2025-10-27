@@ -36,50 +36,56 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
 
-  // Prevent page jumps: memoized empty spacer for status row height
-  const STATUS_HEIGHT = 44;
-  const StatusRow = useMemo(
-    () => (
+  // -------- Floating toast (no layout changes) --------
+  function Toast() {
+    if (!err && !msg) return null;
+    const isErr = !!err;
+    return (
       <div
         style={{
-          height: STATUS_HEIGHT,
-          margin: "0 auto 1rem auto",
-          maxWidth: 900,
-          display: "flex",
-          alignItems: "center",
+          position: "fixed",
+          right: 16,
+          bottom: 16,
+          zIndex: 1000,
+          maxWidth: 420,
+          background: isErr ? "var(--alert-bg)" : "#d4edda",
+          color: isErr ? "var(--alert-text)" : "#155724",
+          border: `1px solid ${isErr ? "var(--alert-border)" : "#c3e6cb"}`,
+          boxShadow: "0 8px 20px rgba(0,0,0,.25)",
+          padding: "10px 12px",
+          borderRadius: 10,
         }}
+        role="status"
+        aria-live="polite"
       >
-        {err ? (
-          <div className="alert" style={{ width: "100%" }}>{err}</div>
-        ) : msg ? (
-          <div
-            className="alert"
-            style={{
-              width: "100%",
-              color: "#155724",
-              background: "#d4edda",
-              borderColor: "#c3e6cb",
-            }}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ whiteSpace: "pre-wrap" }}>{isErr ? err : msg}</div>
+          <button
+            type="button"
+            onClick={() => { setErr(""); setMsg(""); }}
+            className="link"
+            style={{ fontWeight: 700 }}
           >
-            {msg}
-          </div>
-        ) : null}
+            ✕
+          </button>
+        </div>
       </div>
-    ),
-    [err, msg]
-  );
+    );
+  }
 
-  useEffect(() => {
-    // Apply any saved theme before first paint to avoid flicker
-    try {
-      const stored = localStorage.getItem("gradeify_theme");
-      if (stored === "dark" || stored === "light") {
-        applyTheme(stored);
-        setTheme(stored);
-      }
-    } catch {}
-  }, []);
+  // Apply saved theme once
+// Only apply theme once on mount, not when other state updates
+useEffect(() => {
+  const stored = localStorage.getItem("gradeify_theme");
+  if (stored === "dark" || stored === "light") {
+    document.documentElement.setAttribute("data-theme", stored);
+  }
+  // don't call setTheme() here — that triggers a render loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
+
+  // Initial load of settings
   useEffect(() => {
     (async () => {
       try {
@@ -143,7 +149,11 @@ export default function SettingsPage() {
     }
   }
 
-  // Minimal consistent card wrapper
+  // keep inputs from accidentally submitting on Enter while typing
+  const preventEnterSubmit = (e) => {
+    if (e.key === "Enter") e.preventDefault();
+  };
+
   const Card = ({ title, children }) => (
     <section className="card" style={{ borderRadius: 16 }}>
       <div className="card-title" style={{ marginTop: 0 }}>{title}</div>
@@ -151,17 +161,10 @@ export default function SettingsPage() {
     </section>
   );
 
-  if (loading) return <div className="page" style={{ padding: "2rem" }}>
-Loading…</div>;
+  if (loading) return <div className="page" style={{ padding: "2rem" }}>Loading…</div>;
 
   return (
-    <div
-      className="page"
-      style={{
-        minHeight: "100vh",
-        padding: "2rem",
-      }}
-    >
+    <div className="page" style={{ minHeight: "100vh", padding: "2rem" }}>
       {/* Top bar */}
       <div
         style={{
@@ -173,19 +176,19 @@ Loading…</div>;
           gap: 12,
         }}
       >
-        <h1 style={{ margin: 0, color: "#5b57f5" }}>Settings</h1>
+        <h1 style={{ margin: 0, color: "var(--brand)" }}>Settings</h1>
         <button className="btn" type="button" onClick={() => nav("/manual")}>
           ← Back to Dashboard
         </button>
       </div>
 
-      {/* Fixed-height status area to prevent layout jumps while typing */}
-      {StatusRow}
+      {/* Floating toast (no layout shift) */}
+      <Toast />
 
       <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: "1rem" }}>
         {/* Theme */}
         <Card title="Appearance">
-          <form className="grid3" onSubmit={onSaveTheme}>
+          <form className="grid3" onSubmit={onSaveTheme} onKeyDown={preventEnterSubmit}>
             <label className="muted">Theme</label>
             <select
               className="input"
@@ -208,7 +211,7 @@ Loading…</div>;
           <div className="muted" style={{ marginBottom: 8 }}>
             Current: <b>{username}</b>
           </div>
-          <form className="grid3" onSubmit={onSaveUsername} noValidate>
+          <form className="grid3" onSubmit={onSaveUsername} noValidate onKeyDown={preventEnterSubmit}>
             <label className="muted" htmlFor="new-username">New username</label>
             <input
               id="new-username"
@@ -222,7 +225,6 @@ Loading…</div>;
             <div />
             <div />
             <div style={{ textAlign: "right" }}>
-              {/* Explicit type to avoid accidental submits */}
               <button className="btn" type="submit">Change Username</button>
             </div>
           </form>
@@ -230,7 +232,7 @@ Loading…</div>;
 
         {/* Password */}
         <Card title="Change Password">
-          <form className="grid3" onSubmit={onChangePassword} noValidate>
+          <form className="grid3" onSubmit={onChangePassword} noValidate onKeyDown={preventEnterSubmit}>
             <label className="muted" htmlFor="cur-pw">Current password</label>
             <input
               id="cur-pw"
@@ -277,3 +279,4 @@ Loading…</div>;
     </div>
   );
 }
+
