@@ -5,10 +5,20 @@ import session from "express-session";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import db, { newId } from "./db.js";
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 dotenv.config();
 
 const app = express();
+
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    credentials: true,
+  },
+});
 
 /* -------------------------- middleware -------------------------- */
 app.use(helmet());
@@ -554,7 +564,101 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     sumWeights,
   });
 });
+// --- GROUP SYNC & REAL-TIME WITH SOCKET.IO ---
 
+// Utility: check group membership
+function requireGroupMember(req, res, next) {
+  const groupId = req.params.groupId;
+  if (!groupId) return res.status(400).json({ error: "Missing groupId." });
+  const exists = db.prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(groupId, req.session.userId);
+  if (!exists) return res.status(403).json({ error: "Not in group" });
+  next();
+}
+
+// Create a group
+app.post("/groups", requireUser, (req, res) => {
+  const { name = "" } = req.body;
+  if (!name.trim()) return res.status(400).json({ error: "Group name required" });
+  const groupId = newId();
+  db.prepare("INSERT INTO groups (id, name) VALUES (?, ?)").run(groupId, name.trim());
+  db.prepare("INSERT INTO group_members (id, group_id, user_id) VALUES (?, ?, ?)")
+    .run(newId(), groupId, req.session.userId);
+  res.json({ ok: true, group: { id: groupId, name: name.trim() } });
+});
+
+// Join a group
+app.post("/groups/:groupId/join", requireUser, (req, res) => {
+  const { groupId } = req.params;
+  const group = db.prepare("SELECT * FROM groups WHERE id = ?").get(groupId);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  db.prepare("INSERT OR IGNORE INTO group_members (id, group_id, user_id) VALUES (?, ?, ?)")
+    .run(newId(), groupId, req.session.userId);
+  res.json({ ok: true, group });
+});
+
+// Get classes in a group
+app.get("/groups/:groupId/classes", requireUser, requireGroupMember, (req, res) => {
+  const { groupId } = req.params;
+  const rows = db.prepare("SELECT * FROM classes WHERE group_id = ? ORDER BY period, name").all(groupId);
+  res.json({ ok: true, classes: rows });
+});
+
+// Create a class (auto sync)
+app.post("/groups/:groupId/classes", requireUser, requireGroupMember, (req, res) => {
+  const { groupId } = req.params;
+  const { name = "", period = null, teacher = null, weight = null } = req.body;
+  if (!name.trim()) return res.status(400).json({ error: "Class name required" });
+  const id = newId();
+  db.prepare(`
+    INSERT INTO classes (id, group_id, name, period, teacher, weight, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, groupId, name.trim(), period, teacher, weight, new Date().toISOString());
+  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
+  io.to(groupId).emit("refreshClasses", { action: "add", class: row });
+  res.json({ ok: true, class: row });
+});
+
+// Update class (auto sync)
+app.put("/groups/:groupId/classes/:id", requireUser, requireGroupMember, (req, res) => {
+  const { groupId, id } = req.params;
+  const { name, period, teacher, weight } = req.body;
+  db.prepare(
+    `
+    UPDATE classes SET
+      name = COALESCE(?, name),
+      period = COALESCE(?, period),
+      teacher = COALESCE(?, teacher),
+      weight = COALESCE(?, weight)
+    WHERE id = ? AND group_id = ?
+  `
+  ).run(
+    name?.trim() ?? null, period ?? null, teacher ?? null, weight ?? null, id, groupId
+  );
+  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
+  io.to(groupId).emit("refreshClasses", { action: "update", class: row });
+  res.json({ ok: true, class: row });
+});
+
+// Delete class (auto sync)
+app.delete("/groups/:groupId/classes/:id", requireUser, requireGroupMember, (req, res) => {
+  const { groupId, id } = req.params;
+  db.prepare("DELETE FROM classes WHERE id = ? AND group_id = ?").run(id, groupId);
+  io.to(groupId).emit("refreshClasses", { action: "delete", classId: id });
+  res.json({ ok: true });
+});
+
+// --- Socket.IO connection handler ---
+io.on("connection", (socket) => {
+  socket.on("joinGroup", (groupId) => {
+    socket.join(groupId);
+  });
+});
+
+// --- REPLACE your last app.listen ---
+// It must be at the bottom of the file:
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`✅ Backend running on ${PORT} (Socket.IO active)`));
 /* ------------------------------ SERVER ----------------------------- */
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
