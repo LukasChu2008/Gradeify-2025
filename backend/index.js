@@ -659,6 +659,4 @@ io.on("connection", (socket) => {
 // It must be at the bottom of the file:
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`✅ Backend running on ${PORT} (Socket.IO active)`));
-/* ------------------------------ SERVER ----------------------------- */
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`✅ Backend running on ${PORT}`));
+
