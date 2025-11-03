@@ -554,45 +554,6 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     sumWeights,
   });
 });
-/* ---------------------------- USER ENDPOINTS ---------------------------- */
-
-// Get all users (admin/debug)
-app.get("/api/users", (req, res) => {
-  try {
-    const users = db
-      .prepare("SELECT id, username, display_name, created_at FROM users ORDER BY created_at DESC")
-      .all();
-    res.json({ ok: true, users });
-  } catch (e) {
-    res.status(500).json({ error: e.message || "Failed to get users." });
-  }
-});
-
-// Add a new user (manual create)
-app.post("/api/users", async (req, res) => {
-  try {
-    const { username = "", password = "", displayName = "" } = req.body || {};
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password required." });
-    }
-
-    const exists = db
-      .prepare("SELECT 1 FROM users WHERE lower(username) = ?")
-      .get(username.toLowerCase());
-    if (exists) return res.status(409).json({ error: "Username already exists." });
-
-    const id = newId();
-    const hash = await bcrypt.hash(password, 12);
-    db.prepare(
-      `INSERT INTO users (id, username, password_hash, display_name, created_at)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(id, username.trim(), hash, displayName.trim() || username.trim(), new Date().toISOString());
-
-    res.json({ ok: true, user: { id, username, displayName: displayName || username } });
-  } catch (e) {
-    res.status(500).json({ error: e.message || "Failed to create user." });
-  }
-});
 
 /* ------------------------------ SERVER ----------------------------- */
 const PORT = process.env.PORT || 3001;
