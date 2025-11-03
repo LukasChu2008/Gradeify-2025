@@ -120,7 +120,8 @@ useEffect(() => {
 
   async function onSaveUsername(e) {
     e.preventDefault(); // prevent page reload → avoids jump
-    setErr(""); setMsg("");
+    setErr(""); 
+    setMsg("");
     try {
       const u = (newUsername || "").trim();
       if (!u) throw new Error("New username cannot be empty.");
