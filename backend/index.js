@@ -44,6 +44,7 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: isHttpsOrigin
       ? { httpOnly: true, sameSite: "none", secure: true } // HTTPS (Codespaces, etc.)
       : { httpOnly: true, sameSite: "lax", secure: false }, // Local HTTP
