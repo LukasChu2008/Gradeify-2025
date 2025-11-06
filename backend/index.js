@@ -1,21 +1,30 @@
+// backend/index.js
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import session from "express-session";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
-import db, { newId } from "./db.js";
-import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
+import { supabase, newId } from "./db.js";
 
 dotenv.config();
 
 const app = express();
 
+/* ----------- ORIGIN NORMALIZATION + PROXY TRUST ----------- */
+const rawOrigin = (process.env.CLIENT_ORIGIN || "http://localhost:5173").replace(/\/$/, "");
+const isHttpsOrigin = /^https:\/\//i.test(rawOrigin);
+
+// Needed if you're behind a proxy/https (Codespaces/Cloud), so secure cookies work
+if (isHttpsOrigin) app.set("trust proxy", 1);
+
+/* ------------------------ HTTP + Socket.IO ------------------------ */
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: rawOrigin,
     credentials: true,
   },
 });
@@ -25,7 +34,7 @@ app.use(helmet());
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: rawOrigin,
     credentials: true,
   })
 );
@@ -35,7 +44,9 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: "lax", secure: false },
+    cookie: isHttpsOrigin
+      ? { httpOnly: true, sameSite: "none", secure: true } // HTTPS (Codespaces, etc.)
+      : { httpOnly: true, sameSite: "lax", secure: false }, // Local HTTP
   })
 );
 
@@ -44,78 +55,100 @@ function requireUser(req, res, next) {
   next();
 }
 
-/* ===================== SETTINGS & PROFILE (/me/*) ===================== */
+/* ---------------------------- DEBUG ---------------------------- */
+// Are we alive?
+app.get("/health", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
-// Return profile + preferences
-app.get("/me/settings", requireUser, (req, res) => {
-  const u = db.prepare("SELECT username, display_name, preferences FROM users WHERE id = ?")
-    .get(req.session.userId);
-  const prefs = u?.preferences ? JSON.parse(u.preferences) : {};
+// What session does the server see on this request?
+app.get("/whoami", (req, res) => {
   res.json({
-    ok: true,
-    profile: { username: u?.username || "", displayName: u?.display_name || "" },
-    preferences: { theme: prefs.theme || "light" }
+    userId: req.session?.userId || null,
+    sessionId: req.sessionID || null,
   });
 });
 
-// Update preferences (theme only)
-app.patch("/me/preferences", requireUser, (req, res) => {
-  const { theme } = req.body || {};
-  const cur = db.prepare("SELECT preferences FROM users WHERE id = ?").get(req.session.userId);
-  const prev = cur?.preferences ? JSON.parse(cur.preferences) : {};
-  const merged = { ...prev, theme: theme || "light" };
-  db.prepare("UPDATE users SET preferences = ? WHERE id = ?")
-    .run(JSON.stringify(merged), req.session.userId);
-  res.json({ ok: true, preferences: merged });
+// Set a test cookie to ensure browser accepts cookies from this origin
+app.get("/debug/set-cookie", (req, res) => {
+  res.cookie("gradeify_test", "ok", {
+    httpOnly: true,
+    sameSite: isHttpsOrigin ? "none" : "lax",
+    secure: isHttpsOrigin,
+  });
+  res.json({ ok: true, note: "Set test cookie gradeify_test" });
 });
 
-// Update display name
-app.patch("/me/profile", requireUser, (req, res) => {
-  const { displayName = "" } = req.body || {};
-  db.prepare("UPDATE users SET display_name = ? WHERE id = ?")
-    .run(displayName.trim(), req.session.userId);
-  res.json({ ok: true, displayName: displayName.trim() });
-});
+/* -------------------- AUTH (email) /api/* -------------------- */
 
-// Change username (checks uniqueness, case-insensitive)
-app.patch("/me/username", requireUser, (req, res) => {
-  const { newUsername = "" } = req.body || {};
-  const uname = newUsername.trim();
-  if (!uname) return res.status(400).json({ error: "Username cannot be empty." });
-
-  const exists = db.prepare("SELECT 1 FROM users WHERE lower(username) = ? AND id != ?")
-    .get(uname.toLowerCase(), req.session.userId);
-  if (exists) return res.status(409).json({ error: "Username already in use." });
-
-  db.prepare("UPDATE users SET username = ? WHERE id = ?").run(uname, req.session.userId);
-  res.json({ ok: true, username: uname });
-});
-
-// Change password (verify current)
-app.patch("/me/password", requireUser, async (req, res) => {
+// Create user (register via email)
+app.post("/api/users", async (req, res) => {
   try {
-    const { currentPassword = "", newPassword = "" } = req.body || {};
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: "Missing fields" });
-    }
-    const user = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.session.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: "email and password required" });
 
-    const valid = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!valid) return res.status(403).json({ error: "Incorrect password" });
+    const { data: clash, error: clashErr } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email);
+    if (clashErr) return res.status(500).json({ error: clashErr.message });
+    if (clash?.length) return res.status(409).json({ error: "Email already registered" });
 
-    const hash = await bcrypt.hash(newPassword, 12);
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, req.session.userId);
-    res.json({ ok: true });
+    const password_hash = await bcrypt.hash(password, 10);
+
+    const { data, error } = await supabase
+      .from("users")
+      .insert({ email, password_hash })
+      .select("id, email")
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    // Ensure clean session + save
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: "Session error" });
+      req.session.userId = data.id;
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: "Session save failed" });
+        res.status(201).json({ id: data.id, email: data.email });
+      });
+    });
   } catch (e) {
-    res.status(500).json({ error: e.message || "Password change failed" });
+    res.status(500).json({ error: e.message });
   }
 });
 
+// Login (email)
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
 
-/* -------------------- AUTH: register / login / me -------------------- */
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, email, password_hash")
+      .eq("email", email)
+      .single();
 
-// Register
+    if (error) return res.status(401).json({ error: "Invalid credentials" });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: "Session error" });
+      req.session.userId = user.id;
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: "Session save failed" });
+        res.json({ id: user.id, email: user.email });
+      });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* -------------------- AUTH (username) /auth/* -------------------- */
+
+// Register (username)
 app.post("/auth/register", async (req, res) => {
   try {
     const { username = "", password = "" } = req.body || {};
@@ -123,302 +156,338 @@ app.post("/auth/register", async (req, res) => {
     if (!uname || !password) {
       return res.status(400).json({ error: "Username and password are required." });
     }
-    const exists = db
-      .prepare("SELECT 1 FROM users WHERE lower(username) = ?")
-      .get(uname.toLowerCase());
-    if (exists) return res.status(409).json({ error: "Username already in use." });
+
+    // case-insensitive uniqueness check
+    const { data: clash, error: cErr } = await supabase
+      .from("users")
+      .select("id")
+      .ilike("username", uname);
+    if (cErr) return res.status(500).json({ error: cErr.message });
+    if (clash?.length) return res.status(409).json({ error: "Username already in use." });
 
     const hash = await bcrypt.hash(password, 12);
-    const id = newId();
-    db.prepare(
-      `
-      INSERT INTO users (id, username, password_hash, created_at)
-      VALUES (?, ?, ?, ?)
-    `
-    ).run(id, uname, hash, new Date().toISOString());
+    const { data, error } = await supabase
+      .from("users")
+      .insert({ username: uname, password_hash: hash })
+      .select("id, username")
+      .single();
+    if (error) return res.status(400).json({ error: error.message });
 
-    req.session.userId = id;
-    res.json({ ok: true, user: { id, username: uname } });
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: "Session error" });
+      req.session.userId = data.id;
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: "Session save failed" });
+        res.json({ ok: true, user: data });
+      });
+    });
   } catch (e) {
     res.status(500).json({ error: e.message || "Registration failed" });
   }
 });
 
-// Login
+// Login (username)
 app.post("/auth/login", async (req, res) => {
   try {
     const { username = "", password = "" } = req.body || {};
-    const uname = username.trim().toLowerCase();
+    const uname = username.trim();
     if (!uname || !password) return res.status(400).json({ error: "Missing credentials." });
 
-    const user = db.prepare("SELECT * FROM users WHERE lower(username) = ?").get(uname);
-    if (!user) return res.status(401).json({ error: "Invalid credentials." });
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, username, password_hash")
+      .ilike("username", uname)
+      .single();
+    if (error) return res.status(401).json({ error: "Invalid credentials." });
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
 
-    req.session.userId = user.id;
-    res.json({ ok: true, user: { id: user.id, username: user.username } });
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: "Session error" });
+      req.session.userId = user.id;
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: "Session save failed" });
+        res.json({ ok: true, user: { id: user.id, username: user.username } });
+      });
+    });
   } catch (e) {
     res.status(500).json({ error: e.message || "Login failed" });
   }
 });
 
-// Logout
 app.post("/auth/logout", (req, res) => req.session.destroy(() => res.json({ ok: true })));
 
-// Current user
-app.get("/auth/me", (req, res) => {
+// Current user (works for either auth style)
+app.get("/auth/me", async (req, res) => {
   if (!req.session?.userId) return res.json({ ok: true, user: null });
-  const user = db
-    .prepare("SELECT id, username, display_name, preferences, created_at FROM users WHERE id = ?")
-    .get(req.session.userId);
-  res.json({ ok: true, user: user || null });
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, username, display_name, preferences, created_at")
+    .eq("id", req.session.userId)
+    .single();
+  if (error) return res.json({ ok: true, user: null });
+  res.json({ ok: true, user: data });
 });
 
-/* -------------------------- SETTINGS ROUTES -------------------------- */
-/* All routes use the session user (no username in body) */
+/* ===================== SETTINGS & PROFILE (/me/*) ===================== */
 
-app.get("/me/settings", requireUser, (req, res) => {
-  const user = db
-    .prepare("SELECT username, display_name, preferences FROM users WHERE id = ?")
-    .get(req.session.userId);
-  const prefs = user?.preferences ? JSON.parse(user.preferences) : null;
+// Return profile + preferences
+app.get("/me/settings", requireUser, async (req, res) => {
+  const { data: u, error } = await supabase
+    .from("users")
+    .select("username, email, display_name, preferences")
+    .eq("id", req.session.userId)
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  const prefs = u?.preferences || {};
   res.json({
     ok: true,
-    profile: { username: user?.username || null, displayName: user?.display_name || "" },
-    preferences: prefs || {},
+    profile: { username: u?.username || "", email: u?.email || "", displayName: u?.display_name || "" },
+    preferences: { theme: prefs.theme || "light", ...prefs },
   });
 });
 
-// Change display name
-app.patch("/me/profile", requireUser, (req, res) => {
-  const { displayName = "" } = req.body || {};
-  if (typeof displayName !== "string" || displayName.length > 60) {
-    return res.status(400).json({ error: "Invalid display name." });
-  }
-  db.prepare("UPDATE users SET display_name = ? WHERE id = ?").run(displayName, req.session.userId);
-  res.json({ ok: true, displayName });
+// Update preferences (merge)
+app.patch("/me/preferences", requireUser, async (req, res) => {
+  const { data: cur, error: gErr } = await supabase
+    .from("users")
+    .select("preferences")
+    .eq("id", req.session.userId)
+    .single();
+  if (gErr) return res.status(500).json({ error: gErr.message });
+  const merged = { ...(cur?.preferences || {}), ...(req.body || {}) };
+  const { error: uErr, data } = await supabase
+    .from("users")
+    .update({ preferences: merged })
+    .eq("id", req.session.userId)
+    .select("preferences")
+    .single();
+  if (uErr) return res.status(500).json({ error: uErr.message });
+  res.json({ ok: true, preferences: data.preferences });
 });
 
-// Change username (ensure unique, case-insensitive)
-app.patch("/me/username", requireUser, (req, res) => {
+// Update display name
+app.patch("/me/profile", requireUser, async (req, res) => {
+  const { displayName = "" } = req.body || {};
+  const { error } = await supabase
+    .from("users")
+    .update({ display_name: displayName.trim() })
+    .eq("id", req.session.userId);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, displayName: displayName.trim() });
+});
+
+// Change username (case-insensitive uniqueness)
+app.patch("/me/username", requireUser, async (req, res) => {
   const { newUsername = "" } = req.body || {};
   const uname = newUsername.trim();
-  if (!uname) return res.status(400).json({ error: "New username is required." });
-
-  const exists = db
-    .prepare("SELECT 1 FROM users WHERE lower(username) = ? AND id != ?")
-    .get(uname.toLowerCase(), req.session.userId);
-  if (exists) return res.status(409).json({ error: "Username already in use." });
-
-  db.prepare("UPDATE users SET username = ? WHERE id = ?").run(uname, req.session.userId);
+  if (!uname) return res.status(400).json({ error: "Username cannot be empty." });
+  const { data: clash, error: cErr } = await supabase
+    .from("users")
+    .select("id")
+    .neq("id", req.session.userId)
+    .ilike("username", uname);
+  if (cErr) return res.status(500).json({ error: cErr.message });
+  if (clash && clash.length) return res.status(409).json({ error: "Username already in use." });
+  const { error } = await supabase
+    .from("users")
+    .update({ username: uname })
+    .eq("id", req.session.userId);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true, username: uname });
 });
 
-// Change password
+// Change password (verify current)
 app.patch("/me/password", requireUser, async (req, res) => {
   try {
     const { currentPassword = "", newPassword = "" } = req.body || {};
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: "Missing fields." });
-    }
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Missing fields" });
     if (newPassword.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters." });
     }
 
-    const user = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.session.userId);
-    if (!user) return res.status(404).json({ error: "User not found." });
+    const { data: user, error: gErr } = await supabase
+      .from("users")
+      .select("password_hash")
+      .eq("id", req.session.userId)
+      .single();
+    if (gErr) return res.status(500).json({ error: gErr.message });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
     const valid = await bcrypt.compare(currentPassword, user.password_hash);
     if (!valid) return res.status(403).json({ error: "Current password incorrect." });
 
     const hash = await bcrypt.hash(newPassword, 12);
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, req.session.userId);
+    const { error: uErr } = await supabase
+      .from("users")
+      .update({ password_hash: hash })
+      .eq("id", req.session.userId);
+    if (uErr) return res.status(500).json({ error: uErr.message });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message || "Password change failed" });
   }
 });
 
-// Save preferences (appearance/accessibility)
-app.patch("/me/preferences", requireUser, (req, res) => {
-  // only allow known keys
-  const allowed = ["theme", "textScale", "highContrast", "reduceMotion"];
-  const prefsIn = req.body || {};
-  const prefs = {};
-  for (const k of allowed) if (k in prefsIn) prefs[k] = prefsIn[k];
-
-  const existing = db
-    .prepare("SELECT preferences FROM users WHERE id = ?")
-    .get(req.session.userId)?.preferences;
-  const merged = { ...(existing ? JSON.parse(existing) : {}), ...prefs };
-
-  db.prepare("UPDATE users SET preferences = ? WHERE id = ?").run(
-    JSON.stringify(merged),
-    req.session.userId
-  );
-  res.json({ ok: true, preferences: merged });
-});
-
 /* -------------------------- CLASSES (CRUD) -------------------------- */
-app.get("/me/classes", requireUser, (req, res) => {
-  const rows = db
-    .prepare("SELECT * FROM classes WHERE user_id = ? ORDER BY period, name")
-    .all(req.session.userId);
-  res.json({ ok: true, classes: rows });
+
+// List classes
+app.get("/me/classes", requireUser, async (req, res) => {
+  const { data, error } = await supabase
+    .from("classes")
+    .select("*")
+    .eq("user_id", req.session.userId)
+    .order("period", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, classes: data });
 });
 
-app.post("/me/classes", requireUser, (req, res) => {
+// Create class
+app.post("/me/classes", requireUser, async (req, res) => {
   const { name = "", period = null, teacher = null, weight = null } = req.body || {};
   if (!name.trim()) return res.status(400).json({ error: "Class name is required." });
-  const id = newId();
-  db.prepare(
-    `
-    INSERT INTO classes (id, user_id, name, period, teacher, weight, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `
-  ).run(id, req.session.userId, name.trim(), period, teacher, weight, new Date().toISOString());
-  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
-  res.json({ ok: true, class: row });
+  const payload = {
+    user_id: req.session.userId,
+    name: name.trim(),
+    period,
+    teacher,
+    weight,
+  };
+  const { data, error } = await supabase.from("classes").insert(payload).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true, class: data });
 });
 
-app.put("/me/classes/:id", requireUser, (req, res) => {
+// Update class
+app.put("/me/classes/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const { name, period, teacher, weight } = req.body || {};
-  const exists = db
-    .prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Class not found." });
+  const patch = {};
+  if (typeof req.body?.name === "string") patch.name = req.body.name.trim();
+  if ("period" in req.body) patch.period = req.body.period;
+  if ("teacher" in req.body) patch.teacher = req.body.teacher;
+  if ("weight" in req.body) patch.weight = req.body.weight;
 
-  db.prepare(
-    `
-    UPDATE classes SET
-      name = COALESCE(?, name),
-      period = COALESCE(?, period),
-      teacher = COALESCE(?, teacher),
-      weight = COALESCE(?, weight)
-    WHERE id = ? AND user_id = ?
-  `
-  ).run(
-    name?.trim() ?? null,
-    period ?? null,
-    teacher ?? null,
-    weight ?? null,
-    id,
-    req.session.userId
-  );
+  const { data, error } = await supabase
+    .from("classes")
+    .update(patch)
+    .eq("id", id)
+    .eq("user_id", req.session.userId)
+    .select()
+    .single();
 
-  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
-  res.json({ ok: true, class: row });
+  if (error) return res.status(404).json({ error: error.message });
+  res.json({ ok: true, class: data });
 });
 
-app.delete("/me/classes/:id", requireUser, (req, res) => {
+// Delete class (also delete grades if not using FK cascade)
+app.delete("/me/classes/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const exists = db
-    .prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Class not found." });
-  db.prepare("DELETE FROM classes WHERE id = ? AND user_id = ?").run(id, req.session.userId);
-  db.prepare("DELETE FROM grades WHERE class_id = ? AND user_id = ?").run(id, req.session.userId);
+
+  const { error } = await supabase
+    .from("classes")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", req.session.userId);
+
+  if (error) return res.status(404).json({ error: "Class not found." });
+
+  // If you didn't set ON DELETE CASCADE on grades.class_id:
+  await supabase.from("grades").delete().eq("class_id", id).eq("user_id", req.session.userId);
+
   res.json({ ok: true });
 });
 
 /* --------------------------- GRADES (CRUD) --------------------------- */
-app.get("/me/classes/:classId/grades", requireUser, (req, res) => {
+
+// List grades for a class
+app.get("/me/classes/:classId/grades", requireUser, async (req, res) => {
   const { classId } = req.params;
-  const rows = db
-    .prepare("SELECT * FROM grades WHERE class_id = ? AND user_id = ? ORDER BY due_date")
-    .all(classId, req.session.userId);
-  res.json({ ok: true, grades: rows });
+  const { data, error } = await supabase
+    .from("grades")
+    .select("*")
+    .eq("class_id", classId)
+    .eq("user_id", req.session.userId)
+    .order("due_date", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, grades: data });
 });
 
-app.post("/me/classes/:classId/grades", requireUser, (req, res) => {
+// Create grade
+app.post("/me/classes/:classId/grades", requireUser, async (req, res) => {
   const { classId } = req.params;
   const { title = "", points_earned, points_possible, category = null, due_date = null } =
     req.body || {};
   if (!title.trim()) return res.status(400).json({ error: "Title is required." });
-  if (points_earned == null || points_possible == null) {
+  if (points_earned == null || points_possible == null)
     return res.status(400).json({ error: "Points earned/possible are required." });
-  }
-  const classExists = db
-    .prepare("SELECT 1 FROM classes WHERE id = ? AND user_id = ?")
-    .get(classId, req.session.userId);
-  if (!classExists) return res.status(404).json({ error: "Class not found." });
 
-  const id = newId();
-  db.prepare(
-    `
-    INSERT INTO grades (id, user_id, class_id, title, points_earned, points_possible, category, due_date, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `
-  ).run(
-    id,
-    req.session.userId,
-    classId,
-    title.trim(),
-    +points_earned,
-    +points_possible,
+  const payload = {
+    user_id: req.session.userId,
+    class_id: classId,
+    title: title.trim(),
+    points_earned: Number(points_earned),
+    points_possible: Number(points_possible),
     category,
     due_date,
-    new Date().toISOString()
-  );
-  const row = db.prepare("SELECT * FROM grades WHERE id = ?").get(id);
-  res.json({ ok: true, grade: row });
+  };
+  const { data, error } = await supabase.from("grades").insert(payload).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true, grade: data });
 });
 
-app.put("/me/grades/:id", requireUser, (req, res) => {
+// Update grade
+app.put("/me/grades/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const { title, points_earned, points_possible, category, due_date } = req.body || {};
-  const exists = db
-    .prepare("SELECT 1 FROM grades WHERE id = ? AND user_id = ?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Grade not found." });
+  const patch = {};
+  if (typeof req.body?.title === "string") patch.title = req.body.title.trim();
+  if ("points_earned" in req.body) patch.points_earned = Number(req.body.points_earned);
+  if ("points_possible" in req.body) patch.points_possible = Number(req.body.points_possible);
+  if ("category" in req.body) patch.category = req.body.category;
+  if ("due_date" in req.body) patch.due_date = req.body.due_date;
 
-  db.prepare(
-    `
-    UPDATE grades SET
-      title = COALESCE(?, title),
-      points_earned = COALESCE(?, points_earned),
-      points_possible = COALESCE(?, points_possible),
-      category = COALESCE(?, category),
-      due_date = COALESCE(?, due_date)
-    WHERE id = ? AND user_id = ?
-  `
-  ).run(
-    title?.trim() ?? null,
-    points_earned != null ? Number(points_earned) : null,
-    points_possible != null ? Number(points_possible) : null,
-    category ?? null,
-    due_date ?? null,
-    id,
-    req.session.userId
-  );
+  const { data, error } = await supabase
+    .from("grades")
+    .update(patch)
+    .eq("id", id)
+    .eq("user_id", req.session.userId)
+    .select()
+    .single();
 
-  const row = db.prepare("SELECT * FROM grades WHERE id = ?").get(id);
-  res.json({ ok: true, grade: row });
+  if (error) return res.status(404).json({ error: error.message });
+  res.json({ ok: true, grade: data });
 });
 
-app.delete("/me/grades/:id", requireUser, (req, res) => {
+// Delete grade
+app.delete("/me/grades/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const exists = db
-    .prepare("SELECT 1 FROM grades WHERE id = ? AND user_id = ?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Grade not found." });
-  db.prepare("DELETE FROM grades WHERE id = ? AND user_id = ?").run(id, req.session.userId);
+  const { error } = await supabase
+    .from("grades")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", req.session.userId);
+  if (error) return res.status(404).json({ error: "Grade not found." });
   res.json({ ok: true });
 });
 
 /* ------------------------- CATEGORIES (CRUD) ------------------------- */
-app.get("/me/classes/:classId/categories", requireUser, (req, res) => {
+
+// List categories
+app.get("/me/classes/:classId/categories", requireUser, async (req, res) => {
   const { classId } = req.params;
-  const rows = db
-    .prepare("SELECT * FROM categories WHERE class_id=? AND user_id=? ORDER BY name")
-    .all(classId, req.session.userId);
-  res.json({ ok: true, categories: rows });
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("class_id", classId)
+    .eq("user_id", req.session.userId)
+    .order("name", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, categories: data });
 });
 
-app.post("/me/classes/:classId/categories", requireUser, (req, res) => {
+// Create category
+app.post("/me/classes/:classId/categories", requireUser, async (req, res) => {
   const { classId } = req.params;
   const { name = "", weight_percent } = req.body || {};
   if (!name.trim()) return res.status(400).json({ error: "Category name is required." });
@@ -426,71 +495,73 @@ app.post("/me/classes/:classId/categories", requireUser, (req, res) => {
   if (!Number.isFinite(w) || w <= 0 || w > 100) {
     return res.status(400).json({ error: "Weight must be 1–100." });
   }
-  const classExists = db
-    .prepare("SELECT 1 FROM classes WHERE id=? AND user_id=?")
-    .get(classId, req.session.userId);
-  if (!classExists) return res.status(404).json({ error: "Class not found." });
-
-  const id = newId();
-  db.prepare(
-    `
-    INSERT INTO categories (id, user_id, class_id, name, weight_percent, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `
-  ).run(id, req.session.userId, classId, name.trim(), w, new Date().toISOString());
-  const row = db.prepare("SELECT * FROM categories WHERE id=?").get(id);
-  res.json({ ok: true, category: row });
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({
+      id: newId(), // optional; DB can generate too
+      user_id: req.session.userId,
+      class_id: classId,
+      name: name.trim(),
+      weight_percent: w,
+    })
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true, category: data });
 });
 
-app.put("/me/categories/:id", requireUser, (req, res) => {
+// Update category
+app.put("/me/categories/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const { name, weight_percent } = req.body || {};
-  const exists = db
-    .prepare("SELECT * FROM categories WHERE id=? AND user_id=?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Category not found." });
-
-  const w = weight_percent == null ? null : Number(weight_percent);
-  if (w != null && (!Number.isFinite(w) || w <= 0 || w > 100)) {
-    return res.status(400).json({ error: "Weight must be 1–100." });
+  const patch = {};
+  if (typeof req.body?.name === "string") patch.name = req.body.name.trim();
+  if ("weight_percent" in req.body) {
+    const w = Number(req.body.weight_percent);
+    if (!Number.isFinite(w) || w <= 0 || w > 100) {
+      return res.status(400).json({ error: "Weight must be 1–100." });
+    }
+    patch.weight_percent = w;
   }
-
-  db.prepare(
-    `
-    UPDATE categories SET
-      name = COALESCE(?, name),
-      weight_percent = COALESCE(?, weight_percent)
-    WHERE id=? AND user_id=?
-  `
-  ).run(name?.trim() ?? null, w ?? null, id, req.session.userId);
-
-  const row = db.prepare("SELECT * FROM categories WHERE id=?").get(id);
-  res.json({ ok: true, category: row });
+  const { data, error } = await supabase
+    .from("categories")
+    .update(patch)
+    .eq("id", id)
+    .eq("user_id", req.session.userId)
+    .select()
+    .single();
+  if (error) return res.status(404).json({ error: "Category not found." });
+  res.json({ ok: true, category: data });
 });
 
-app.delete("/me/categories/:id", requireUser, (req, res) => {
+// Delete category
+app.delete("/me/categories/:id", requireUser, async (req, res) => {
   const { id } = req.params;
-  const exists = db
-    .prepare("SELECT 1 FROM categories WHERE id=? AND user_id=?")
-    .get(id, req.session.userId);
-  if (!exists) return res.status(404).json({ error: "Category not found." });
-  db.prepare("DELETE FROM categories WHERE id=? AND user_id=?").run(id, req.session.userId);
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", req.session.userId);
+  if (error) return res.status(404).json({ error: "Category not found." });
   res.json({ ok: true });
 });
 
 /* ----------------------------- SUMMARY ----------------------------- */
-app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
+app.get("/me/classes/:classId/summary", requireUser, async (req, res) => {
   const { classId } = req.params;
 
-  const cats = db
-    .prepare("SELECT id, name, weight_percent FROM categories WHERE class_id=? AND user_id=?")
-    .all(classId, req.session.userId);
-
-  const grades = db
-    .prepare(
-      "SELECT title, points_earned, points_possible, category FROM grades WHERE class_id=? AND user_id=?"
-    )
-    .all(classId, req.session.userId);
+  const [{ data: cats, error: cErr }, { data: grades, error: gErr }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("id, name, weight_percent")
+      .eq("class_id", classId)
+      .eq("user_id", req.session.userId),
+    supabase
+      .from("grades")
+      .select("title, points_earned, points_possible, category")
+      .eq("class_id", classId)
+      .eq("user_id", req.session.userId),
+  ]);
+  if (cErr || gErr) return res.status(500).json({ error: (cErr || gErr).message });
 
   const byCat = new Map();
   for (const g of grades) {
@@ -508,14 +579,7 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     const key = c.name.trim().toLowerCase();
     const agg = byCat.get(key) || { earned: 0, possible: 0, name: c.name };
     const pct = agg.possible > 0 ? (agg.earned / agg.possible) * 100 : null;
-    return {
-      id: c.id,
-      name: c.name,
-      weight_percent: w,
-      earned: agg.earned,
-      possible: agg.possible,
-      percent: pct,
-    };
+    return { id: c.id, name: c.name, weight_percent: w, earned: agg.earned, possible: agg.possible, percent: pct };
   });
 
   for (const [key, agg] of byCat) {
@@ -535,18 +599,14 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
   let overall = null;
   if (sumWeights > 0) {
     let acc = 0;
-    for (const c of catRows) {
-      if (c.weight_percent > 0 && c.percent != null) {
-        acc += (c.percent * c.weight_percent) / 100;
-      }
+    for (const c of catRows) if (c.weight_percent > 0 && c.percent != null) {
+      acc += (c.percent * c.weight_percent) / 100;
     }
-    const effectiveWeightSum = catRows
+    const effective = catRows
       .filter((c) => c.weight_percent > 0 && c.percent != null)
       .reduce((s, c) => s + c.weight_percent, 0);
-
-    if (effectiveWeightSum > 0) {
-      overall = acc * (100 / effectiveWeightSum);
-    } else {
+    overall = effective > 0 ? acc * (100 / effective) : null;
+    if (overall == null) {
       const totalEarned = grades.reduce((a, g) => a + (+g.points_earned || 0), 0);
       const totalPossible = grades.reduce((a, g) => a + (+g.points_possible || 0), 0);
       overall = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
@@ -557,106 +617,127 @@ app.get("/me/classes/:classId/summary", requireUser, (req, res) => {
     overall = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
   }
 
-  res.json({
-    ok: true,
-    overallPercent: overall,
-    categories: catRows,
-    sumWeights,
-  });
+  res.json({ ok: true, overallPercent: overall, categories: catRows, sumWeights });
 });
-// --- GROUP SYNC & REAL-TIME WITH SOCKET.IO ---
 
-// Utility: check group membership
-function requireGroupMember(req, res, next) {
-  const groupId = req.params.groupId;
-  if (!groupId) return res.status(400).json({ error: "Missing groupId." });
-  const exists = db.prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, req.session.userId);
-  if (!exists) return res.status(403).json({ error: "Not in group" });
-  next();
+/* -------------------- GROUPS + REAL-TIME (Socket.IO) -------------------- */
+
+// helper: check membership
+async function isMember(userId, groupId) {
+  const { data, error } = await supabase
+    .from("group_members")
+    .select("id")
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+async function requireGroupMember(req, res, next) {
+  try {
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ error: "Missing groupId." });
+    const ok = await isMember(req.session.userId, groupId);
+    if (!ok) return res.status(403).json({ error: "Not in group" });
+    next();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 }
 
 // Create a group
-app.post("/groups", requireUser, (req, res) => {
-  const { name = "" } = req.body;
+app.post("/groups", requireUser, async (req, res) => {
+  const { name = "" } = req.body || {};
   if (!name.trim()) return res.status(400).json({ error: "Group name required" });
   const groupId = newId();
-  db.prepare("INSERT INTO groups (id, name) VALUES (?, ?)").run(groupId, name.trim());
-  db.prepare("INSERT INTO group_members (id, group_id, user_id) VALUES (?, ?, ?)")
-    .run(newId(), groupId, req.session.userId);
+
+  const { error: gErr } = await supabase.from("groups").insert({ id: groupId, name: name.trim() });
+  if (gErr) return res.status(500).json({ error: gErr.message });
+
+  // add creator as member
+  await supabase.from("group_members").insert({
+    id: newId(),
+    group_id: groupId,
+    user_id: req.session.userId,
+  });
+
   res.json({ ok: true, group: { id: groupId, name: name.trim() } });
 });
 
 // Join a group
-app.post("/groups/:groupId/join", requireUser, (req, res) => {
+app.post("/groups/:groupId/join", requireUser, async (req, res) => {
   const { groupId } = req.params;
-  const group = db.prepare("SELECT * FROM groups WHERE id = ?").get(groupId);
+  const { data: group } = await supabase.from("groups").select("*").eq("id", groupId).single();
   if (!group) return res.status(404).json({ error: "Group not found" });
-  db.prepare("INSERT OR IGNORE INTO group_members (id, group_id, user_id) VALUES (?, ?, ?)")
-    .run(newId(), groupId, req.session.userId);
+
+  // upsert (requires unique index on (group_id, user_id) to be fully idempotent)
+  await supabase
+    .from("group_members")
+    .upsert({ id: newId(), group_id: groupId, user_id: req.session.userId }, { onConflict: "group_id,user_id" });
+
   res.json({ ok: true, group });
 });
 
 // Get classes in a group
-app.get("/groups/:groupId/classes", requireUser, requireGroupMember, (req, res) => {
+app.get("/groups/:groupId/classes", requireUser, requireGroupMember, async (req, res) => {
   const { groupId } = req.params;
-  const rows = db.prepare("SELECT * FROM classes WHERE group_id = ? ORDER BY period, name").all(groupId);
-  res.json({ ok: true, classes: rows });
+  const { data, error } = await supabase
+    .from("classes")
+    .select("*")
+    .eq("group_id", groupId)
+    .order("period", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, classes: data });
 });
 
 // Create a class (auto sync)
-app.post("/groups/:groupId/classes", requireUser, requireGroupMember, (req, res) => {
+app.post("/groups/:groupId/classes", requireUser, requireGroupMember, async (req, res) => {
   const { groupId } = req.params;
-  const { name = "", period = null, teacher = null, weight = null } = req.body;
+  const { name = "", period = null, teacher = null, weight = null } = req.body || {};
   if (!name.trim()) return res.status(400).json({ error: "Class name required" });
-  const id = newId();
-  db.prepare(`
-    INSERT INTO classes (id, group_id, name, period, teacher, weight, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, groupId, name.trim(), period, teacher, weight, new Date().toISOString());
-  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
-  io.to(groupId).emit("refreshClasses", { action: "add", class: row });
-  res.json({ ok: true, class: row });
+
+  const payload = { id: newId(), group_id: groupId, name: name.trim(), period, teacher, weight };
+  const { data, error } = await supabase.from("classes").insert(payload).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+
+  io.to(groupId).emit("refreshClasses", { action: "add", class: data });
+  res.json({ ok: true, class: data });
 });
 
 // Update class (auto sync)
-app.put("/groups/:groupId/classes/:id", requireUser, requireGroupMember, (req, res) => {
+app.put("/groups/:groupId/classes/:id", requireUser, requireGroupMember, async (req, res) => {
   const { groupId, id } = req.params;
-  const { name, period, teacher, weight } = req.body;
-  db.prepare(
-    `
-    UPDATE classes SET
-      name = COALESCE(?, name),
-      period = COALESCE(?, period),
-      teacher = COALESCE(?, teacher),
-      weight = COALESCE(?, weight)
-    WHERE id = ? AND group_id = ?
-  `
-  ).run(
-    name?.trim() ?? null, period ?? null, teacher ?? null, weight ?? null, id, groupId
-  );
-  const row = db.prepare("SELECT * FROM classes WHERE id = ?").get(id);
-  io.to(groupId).emit("refreshClasses", { action: "update", class: row });
-  res.json({ ok: true, class: row });
+  const patch = {};
+  if (typeof req.body?.name === "string") patch.name = req.body.name.trim();
+  if ("period" in req.body) patch.period = req.body.period;
+  if ("teacher" in req.body) patch.teacher = req.body.teacher;
+  if ("weight" in req.body) patch.weight = req.body.weight;
+
+  const { data, error } = await supabase
+    .from("classes")
+    .update(patch)
+    .eq("id", id)
+    .eq("group_id", groupId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+
+  io.to(groupId).emit("refreshClasses", { action: "update", class: data });
+  res.json({ ok: true, class: data });
 });
 
 // Delete class (auto sync)
-app.delete("/groups/:groupId/classes/:id", requireUser, requireGroupMember, (req, res) => {
+app.delete("/groups/:groupId/classes/:id", requireUser, requireGroupMember, async (req, res) => {
   const { groupId, id } = req.params;
-  db.prepare("DELETE FROM classes WHERE id = ? AND group_id = ?").run(id, groupId);
+  const { error } = await supabase.from("classes").delete().eq("id", id).eq("group_id", groupId);
+  if (error) return res.status(500).json({ error: error.message });
+
   io.to(groupId).emit("refreshClasses", { action: "delete", classId: id });
   res.json({ ok: true });
 });
 
-// --- Socket.IO connection handler ---
-io.on("connection", (socket) => {
-  socket.on("joinGroup", (groupId) => {
-    socket.join(groupId);
-  });
-});
-
-// --- REPLACE your last app.listen ---
-// It must be at the bottom of the file:
+// --- start server ---
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`✅ Backend running on ${PORT} (Socket.IO active)`));
-

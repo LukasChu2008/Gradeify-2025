@@ -1,89 +1,45 @@
 // backend/db.js
-import Database from "better-sqlite3";
+import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import crypto from "crypto";
 
+// Load backend/.env explicitly (ESM imports run before index.js, so do it here)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
-const db = new Database(path.join(__dirname, "gradeify.db"));
-db.pragma("journal_mode = WAL");
-
-// make sure the base tables exist
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS classes (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  period INTEGER,
-  teacher TEXT,
-  weight REAL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS grades (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  class_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  points_earned REAL NOT NULL,
-  points_possible REAL NOT NULL,
-  category TEXT,
-  due_date TEXT,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS categories (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  class_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  weight_percent REAL NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_unique
-ON categories(user_id, class_id, name COLLATE NOCASE);
-`);
-
-// --- make sure new columns exist on users ---
-try {
-  db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT;`);
-} catch (e) {
-  if (!/duplicate column/i.test(e.message)) console.error(e);
-}
-try {
-  db.exec(`ALTER TABLE users ADD COLUMN preferences TEXT;`);
-} catch (e) {
-  if (!/duplicate column/i.test(e.message)) console.error(e);
+// Validate required envs
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error(
+    "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env (backend/.env)."
+  );
 }
 
+// Backend-only Supabase client (never expose the service role key to the frontend)
+export const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+);
+
+// Keep newId() for compatibility; Postgres can also auto-gen ids
 export function newId() {
   return crypto.randomUUID();
 }
 
-export default db;
+/* ------------------------------------------------------------------
+  Optional helpers: call `supabase` directly in routes or centralize here.
+------------------------------------------------------------------- */
 
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS groups (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL
-  )
-`).run();
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS group_members (
-    id TEXT PRIMARY KEY,
-    group_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    FOREIGN KEY (group_id) REFERENCES groups (id)
-  )
-`).run();
+// Example:
+// export async function findUserByUsername(username) {
+//   const { data, error } = await supabase
+//     .from("users")
+//     .select("id, username, password_hash, display_name, preferences, created_at")
+//     .eq("username", username)
+//     .single();
+//   if (error) throw error;
+//   return data;
+// }
