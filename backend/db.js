@@ -72,3 +72,18 @@ export function newId() {
 }
 
 export default db;
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+  )
+`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS group_members (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    FOREIGN KEY (group_id) REFERENCES groups (id)
+  )
+`).run();
