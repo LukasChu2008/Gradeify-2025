@@ -78,75 +78,6 @@ app.get("/debug/set-cookie", (req, res) => {
   res.json({ ok: true, note: "Set test cookie gradeify_test" });
 });
 
-/* -------------------- AUTH (email) /api/* -------------------- */
-
-// Create user (register via email)
-app.post("/api/users", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "email and password required" });
-
-    const { data: clash, error: clashErr } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email);
-    if (clashErr) return res.status(500).json({ error: clashErr.message });
-    if (clash?.length) return res.status(409).json({ error: "Email already registered" });
-
-    const password_hash = await bcrypt.hash(password, 10);
-
-    const { data, error } = await supabase
-      .from("users")
-      .insert({ email, password_hash })
-      .select("id, email")
-      .single();
-
-    if (error) return res.status(400).json({ error: error.message });
-
-    // Ensure clean session + save
-    req.session.regenerate((err) => {
-      if (err) return res.status(500).json({ error: "Session error" });
-      req.session.userId = data.id;
-      req.session.save((saveErr) => {
-        if (saveErr) return res.status(500).json({ error: "Session save failed" });
-        res.status(201).json({ id: data.id, email: data.email });
-      });
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Login (email)
-app.post("/api/login", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
-
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("id, email, password_hash")
-      .eq("email", email)
-      .single();
-
-    if (error) return res.status(401).json({ error: "Invalid credentials" });
-
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
-    req.session.regenerate((err) => {
-      if (err) return res.status(500).json({ error: "Session error" });
-      req.session.userId = user.id;
-      req.session.save((saveErr) => {
-        if (saveErr) return res.status(500).json({ error: "Session save failed" });
-        res.json({ id: user.id, email: user.email });
-      });
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 /* -------------------- AUTH (username) /auth/* -------------------- */
 
 // Register (username)
@@ -162,7 +93,7 @@ app.post("/auth/register", async (req, res) => {
     const { data: clash, error: cErr } = await supabase
       .from("users")
       .select("id")
-      .ilike("username", uname);
+      .eq("username", uname);
     if (cErr) return res.status(500).json({ error: cErr.message });
     if (clash?.length) return res.status(409).json({ error: "Username already in use." });
 
@@ -197,10 +128,15 @@ app.post("/auth/login", async (req, res) => {
     const { data: user, error } = await supabase
       .from("users")
       .select("id, username, password_hash")
-      .ilike("username", uname)
+      .eq("username", uname)
       .single();
-    if (error) return res.status(401).json({ error: "Invalid credentials." });
-
+      if (error || !user) {
+        return res.status(401).json({ error: "Invalid credentials." });
+      }
+       // Guard against malformed/legacy rows
+      if (!user.password_hash || !user.password_hash.startsWith("$2")) {
+        return res.status(400).json({ error: "Account password not set. Please reset." });
+      }
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
 
@@ -288,7 +224,7 @@ app.patch("/me/username", requireUser, async (req, res) => {
     .from("users")
     .select("id")
     .neq("id", req.session.userId)
-    .ilike("username", uname);
+    .eq("username", uname);
   if (cErr) return res.status(500).json({ error: cErr.message });
   if (clash && clash.length) return res.status(409).json({ error: "Username already in use." });
   const { error } = await supabase

@@ -1,20 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "../api/manual";
+import { supabase } from "../supabaseClient"; // <- make sure this is your initialized client
 
 export default function AuthLogin() {
   const nav = useNavigate();
-  const [username, setUsername] = useState("");
+  const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // If already logged in, skip login page
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) nav("/manual");
+    });
+  }, [nav]);
 
   async function onSubmit(e) {
     e.preventDefault();
     setErr(null);
     setLoading(true);
     try {
-      await login({ username: username.trim(), password });
+      // If you use email on Supabase, pass an email. If you're storing "username",
+      // map it to an email or query first. For now, assume it's an email:
+      const { error } = await supabase.auth.signInWithPassword({
+        email: usernameOrEmail.trim(),
+        password
+      });
+      if (error) throw error;
+      // session cookies are set by supabase-js; now safe to navigate
       nav("/manual");
     } catch (e) {
       setErr(e.message || "Login failed");
@@ -30,12 +44,12 @@ export default function AuthLogin() {
 
       <form onSubmit={onSubmit} className="login-form">
         <div className="form-group">
-          <label>Username</label>
+          <label>Email</label>
           <input
             type="text"
-            placeholder="Enter your username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter your email"
+            value={usernameOrEmail}
+            onChange={(e) => setUsernameOrEmail(e.target.value)}
             required
           />
         </div>
