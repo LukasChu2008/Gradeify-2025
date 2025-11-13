@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { supabase } from "../supabaseClient"; // <- make sure this is your initialized client
+import { login, me } from "../api/manual";
 
 export default function AuthLogin() {
   const nav = useNavigate();
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // If already logged in, skip login page
+  // If already logged in (via express-session), skip login page
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) nav("/manual");
+    me().then((res) => {
+      if (res?.user) nav("/manual");
     });
   }, [nav]);
 
@@ -21,14 +21,8 @@ export default function AuthLogin() {
     setErr(null);
     setLoading(true);
     try {
-      // If you use email on Supabase, pass an email. If you're storing "username",
-      // map it to an email or query first. For now, assume it's an email:
-      const { error } = await supabase.auth.signInWithPassword({
-        email: usernameOrEmail.trim(),
-        password
-      });
-      if (error) throw error;
-      // session cookies are set by supabase-js; now safe to navigate
+      await login({ username: username.trim(), password });
+      // session cookie is set by backend; safe to navigate
       nav("/manual");
     } catch (e) {
       setErr(e.message || "Login failed");
@@ -44,12 +38,12 @@ export default function AuthLogin() {
 
       <form onSubmit={onSubmit} className="login-form">
         <div className="form-group">
-          <label>Email</label>
+          <label>Username</label>
           <input
             type="text"
-            placeholder="Enter your email"
-            value={usernameOrEmail}
-            onChange={(e) => setUsernameOrEmail(e.target.value)}
+            placeholder="Enter your username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
         </div>
