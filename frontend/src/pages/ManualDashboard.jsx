@@ -132,20 +132,34 @@ useEffect(() => {
   }
 
   // grade handlers
-  async function onAddGrade(e) {
-    e.preventDefault();
-    setErr(null);
-    const id = currentClassId();
-    if (!id) return;
-    await createGrade(id, {
-      title: gt.trim(),
-      points_earned: Number(ge),
-      points_possible: Number(gp),
-      category: gcat.trim() || null
-    });
-    setGt(""); setGe(""); setGp(""); setGcat("");
-    await refreshClassData(id);
+async function onAddGrade(e) {
+  e.preventDefault();
+  setErr(null);
+
+  const id = currentClassId();
+  if (!id) return;
+
+  const earnedNum = Number(ge);
+  const possibleNum = Number(gp);
+
+  if (!Number.isFinite(earnedNum) || !Number.isFinite(possibleNum)) {
+    setErr("Earned and possible points must be valid numbers.");
+    return;
   }
+
+  await createGrade(id, {
+    title: gt.trim(),
+    points_earned: earnedNum,
+    points_possible: possibleNum,
+    category: gcat.trim() || null,
+  });
+
+  setGt("");
+  setGe("");
+  setGp("");
+  setGcat("");
+  await refreshClassData(id);
+}
 
   async function onRemoveGrade(id) {
     await deleteGrade(id);
@@ -155,17 +169,27 @@ useEffect(() => {
 
   // category handlers
   async function onAddCategory(e) {
-    e.preventDefault();
-    setErr(null);
-    const id = currentClassId();
-    if (!id) return;
-    await createCategory(id, {
-      name: catName.trim(),
-      weight_percent: Number(catWeight)
-    });
-    setCatName(""); setCatWeight("");
-    await refreshClassData(id);
+  e.preventDefault();
+  setErr(null);
+
+  const id = currentClassId();
+  if (!id) return;
+
+  const w = Number(catWeight);
+  if (!Number.isFinite(w)) {
+    setErr("Weight must be a valid number.");
+    return;
   }
+
+  await createCategory(id, {
+    name: catName.trim(),
+    weight_percent: w,
+  });
+
+  setCatName("");
+  setCatWeight("");
+  await refreshClassData(id);
+}
 
   async function onRemoveCategory(id) {
     await deleteCategory(id);
