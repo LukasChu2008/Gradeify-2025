@@ -11,8 +11,6 @@ import { supabase, newId } from "./db.js";
 
 dotenv.config();
 
-const DEV_USER_ID = "ba58488e-3f48-4c17-8d51-41742c0ec8cf";
-
 const app = express();
 
 /* ----------- ORIGIN NORMALIZATION + PROXY TRUST ----------- */
@@ -52,14 +50,6 @@ app.use(
       : { httpOnly: true, sameSite: "lax", secure: false }, // Local HTTP
   })
 );
-
-// ⭐ DEV-ONLY: if there is no user in the session, force it to your user
-app.use((req, _res, next) => {
-  if (!req.session.userId) {
-    req.session.userId = DEV_USER_ID;
-  }
-  next();
-});
 
 function requireUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: "Not logged in" });
