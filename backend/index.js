@@ -172,15 +172,25 @@ app.get("/auth/me", async (req, res) => {
     sessionId: req.sessionID,
     userId: req.session?.userId || null,
   });
-  if (!req.session?.userId) return res.json({ ok: true, user: null });
+
+  if (!req.session?.userId) {
+    return res.json({ ok: true, user: null });
+  }
+
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, username, display_name, preferences, created_at")
+    .select("id, username, display_name, preferences, created_at") // 👈 no email
     .eq("id", req.session.userId)
     .single();
-  if (error) return res.json({ ok: true, user: null });
+
+  if (error) {
+    console.error("/auth/me error:", error.message);
+    return res.json({ ok: true, user: null });
+  }
+
   res.json({ ok: true, user: data });
 });
+
 
 /* ===================== SETTINGS & PROFILE (/me/*) ===================== */
 
@@ -188,14 +198,22 @@ app.get("/auth/me", async (req, res) => {
 app.get("/me/settings", requireUser, async (req, res) => {
   const { data: u, error } = await supabase
     .from("users")
-    .select("username, email, display_name, preferences")
+    .select("username, display_name, preferences") // 👈 no email
     .eq("id", req.session.userId)
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
   const prefs = u?.preferences || {};
   res.json({
     ok: true,
-    profile: { username: u?.username || "", email: u?.email || "", displayName: u?.display_name || "" },
+    profile: {
+      username: u?.username || "",
+      email: "", // 👈 still send an email field so the frontend doesn't freak out
+      displayName: u?.display_name || "",
+    },
     preferences: { theme: prefs.theme || "light", ...prefs },
   });
 });

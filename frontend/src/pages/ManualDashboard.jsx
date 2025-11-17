@@ -67,19 +67,26 @@ export default function ManualDashboard() {
     return sel?.id || classes[0]?.id || null;
   }
 
-  // load user + classes
-  useEffect(() => {
-    (async () => {
+// load user + classes (use username saved at login)
+useEffect(() => {
+  (async () => {
+    try {
       setLoading(true);
-      const u = await me();
-      setDebug(`me() => ${JSON.stringify(u)}`);
-      if (!u?.user) return nav("/login", { replace: true });
-      setUser(u.user);
+
+      // Read username from localStorage (set during login)
+      const storedName = localStorage.getItem("gradeify_username") || "demo";
+      setUser({ username: storedName });
+
       const cls = await listClasses();
       setClasses(cls.classes || []);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
       setLoading(false);
-    })().catch(e => { setErr(e.message); setDebug(`ERROR => ${e.message}`); setLoading(false); });
-  }, [nav]);
+    }
+  })();
+}, []);
+
 
   // load class data (grades + categories + summary)
   async function refreshClassData(classId) {

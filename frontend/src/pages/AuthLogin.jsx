@@ -1,3 +1,4 @@
+// src/pages/AuthLogin.jsx
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login, me } from "../api/manual";
@@ -10,63 +11,65 @@ export default function AuthLogin() {
   const [loading, setLoading] = useState(false);
   const [debug, setDebug] = useState("");
 
-
-  // If already logged in (via express-session), skip login page
+  // If already logged in (best-effort), skip login page
   useEffect(() => {
-    me().then((res) => {
-      setDebug(`me() on /login => ${JSON.stringify(res)}`);
-      if (res?.user) nav("/manual");
-    })
-    .catch(err => {
-      setDebug(`error: ${err.message}`);
-    });
+    (async () => {
+      try {
+        const res = await me();
+        // optional debugging
+        setDebug(`me() on /login => ${JSON.stringify(res)}`);
+
+        if (res?.user) {
+          nav("/manual", { replace: true });
+        }
+      } catch (e) {
+        // ignore errors here; just show debug if you want
+        setDebug(`me() error: ${e.message}`);
+      }
+    })();
   }, [nav]);
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setErr(null);
-    setLoading(true);
-    setDebug("Submitting login…");
-  
-    try {
-      const loginRes = await login({ username: username.trim(), password });
-      setDebug(prev => prev + "\nlogin() => " + JSON.stringify(loginRes));
-  
-      // 🔍 Ask the backend who we are *after* login
-      const meRes = await me();
-      setDebug(prev => prev + "\nafter login me() => " + JSON.stringify(meRes));
-  
-      if (!meRes?.user) {
-        // Login worked BUT /auth/me doesn't see a user: session/cookie issue
-        setErr("Logged in, but /auth/me still says no user (session issue).");
-        // ⛔ Don't navigate if backend doesn't think we're logged in
-        return;
-      }
-  
-      // ✅ Only go to /manual if /auth/me confirms we're logged in
-      nav("/manual");
-    } catch (e) {
-      setErr(e.message || "Login failed");
-      setDebug(prev => prev + "\nlogin error => " + (e.message || String(e)));
-    } finally {
-      setLoading(false);
+async function onSubmit(e) {
+  e.preventDefault();
+  setErr(null);
+  setLoading(true);
+  setDebug("DEBUG: Submitting login…");
+  try {
+    const res = await login({ username: username.trim(), password });
+    setDebug(prev => `${prev}\nlogin() => ${JSON.stringify(res)}`);
+
+    // ⭐ Save username locally so the dashboard can show it
+    if (res?.user?.username) {
+      localStorage.setItem("gradeify_username", res.user.username);
     }
+
+    nav("/manual");
+  } catch (e) {
+    setErr(e.message || "Login failed");
+  } finally {
+    setLoading(false);
   }
-  
+}
+
+
   return (
     <div className="login-page">
-      <div
-      style={{
-        background: "#222",
-        color: "white",
-        padding: "10px",
-        fontSize: "12px",
-        marginBottom: "10px",
-        whiteSpace: "pre-wrap",
-      }}
-    >
-      DEBUG: {debug}
-    </div>
+      {/* Debug box at top */}
+      {debug && (
+        <div
+          style={{
+            background: "#222",
+            color: "white",
+            padding: "10px",
+            fontSize: "12px",
+            marginBottom: "10px",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {debug}
+        </div>
+      )}
+
       <h1 className="title">Gradeify</h1>
       <p className="subtitle">Track your classes, grades, and study smarter!</p>
 
