@@ -11,6 +11,8 @@ import { supabase, newId } from "./db.js";
 
 dotenv.config();
 
+const DEV_USER_ID = "ba58488e-3f48-4c17-8d51-41742c0ec8cf";
+
 const app = express();
 
 /* ----------- ORIGIN NORMALIZATION + PROXY TRUST ----------- */
@@ -50,6 +52,14 @@ app.use(
       : { httpOnly: true, sameSite: "lax", secure: false }, // Local HTTP
   })
 );
+
+// ⭐ DEV-ONLY: if there is no user in the session, force it to your user
+app.use((req, _res, next) => {
+  if (!req.session.userId) {
+    req.session.userId = DEV_USER_ID;
+  }
+  next();
+});
 
 function requireUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: "Not logged in" });
@@ -145,6 +155,7 @@ app.post("/auth/login", async (req, res) => {
       req.session.userId = user.id;
       req.session.save((saveErr) => {
         if (saveErr) return res.status(500).json({ error: "Session save failed" });
+        console.log("✅ LOGIN OK", { userId: user.id, sessionId: req.sessionID });
         res.json({ ok: true, user: { id: user.id, username: user.username } });
       });
     });
@@ -157,6 +168,10 @@ app.post("/auth/logout", (req, res) => req.session.destroy(() => res.json({ ok: 
 
 // Current user (works for either auth style)
 app.get("/auth/me", async (req, res) => {
+  console.log("🔎 /auth/me hit", {
+    sessionId: req.sessionID,
+    userId: req.session?.userId || null,
+  });
   if (!req.session?.userId) return res.json({ ok: true, user: null });
   const { data, error } = await supabase
     .from("users")

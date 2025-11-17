@@ -10,6 +10,7 @@ import {
 import "./ui.css";
 
 export default function ManualDashboard() {
+  const [debug, setDebug] = useState("");
   const nav = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -71,12 +72,13 @@ export default function ManualDashboard() {
     (async () => {
       setLoading(true);
       const u = await me();
+      setDebug(`me() => ${JSON.stringify(u)}`);
       if (!u?.user) return nav("/login", { replace: true });
       setUser(u.user);
       const cls = await listClasses();
       setClasses(cls.classes || []);
       setLoading(false);
-    })().catch(e => { setErr(e.message); setLoading(false); });
+    })().catch(e => { setErr(e.message); setDebug(`ERROR => ${e.message}`); setLoading(false); });
   }, [nav]);
 
   // load class data (grades + categories + summary)
@@ -176,6 +178,18 @@ export default function ManualDashboard() {
 
   return (
     <div className="page">
+      <div
+      style={{
+        background: "#222",
+        color: "white",
+        padding: "10px",
+        fontSize: "12px",
+        marginBottom: "10px",
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      DEBUG: {debug}
+    </div>
       <header className="topbar">
         <div className="title">Gradeify</div>
         <div className="right">
