@@ -10,7 +10,6 @@ import {
 import "./ui.css";
 
 export default function ManualDashboard() {
-  const [debug, setDebug] = useState("");
   const nav = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -68,15 +67,19 @@ export default function ManualDashboard() {
   }
 
 // load user + classes (use username saved at login)
+// load user + classes
 useEffect(() => {
   (async () => {
     try {
       setLoading(true);
+      const u = await me();
 
-      // Read username from localStorage (set during login)
-      const storedName = localStorage.getItem("gradeify_username") || "demo";
-      setUser({ username: storedName });
+      if (!u?.user) {
+        nav("/login", { replace: true });
+        return;
+      }
 
+      setUser(u.user);
       const cls = await listClasses();
       setClasses(cls.classes || []);
     } catch (e) {
@@ -85,8 +88,7 @@ useEffect(() => {
       setLoading(false);
     }
   })();
-}, []);
-
+}, [nav]);
 
   // load class data (grades + categories + summary)
   async function refreshClassData(classId) {
@@ -185,18 +187,6 @@ useEffect(() => {
 
   return (
     <div className="page">
-      <div
-      style={{
-        background: "#222",
-        color: "white",
-        padding: "10px",
-        fontSize: "12px",
-        marginBottom: "10px",
-        whiteSpace: "pre-wrap",
-      }}
-    >
-      DEBUG: {debug}
-    </div>
       <header className="topbar">
         <div className="title">Gradeify</div>
         <div className="right">
