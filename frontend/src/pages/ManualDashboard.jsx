@@ -302,6 +302,31 @@ export default function ManualDashboard() {
     await recomputeGpa();
   }
 
+  async function onClearAllGrades() {
+  const id = currentClassId();
+  if (!id) return;
+  if (!grades.length) return;
+
+  const ok = window.confirm(
+    "Are you sure you want to delete ALL grades for this class? This cannot be undone."
+  );
+  if (!ok) return;
+
+  setErr(null);
+
+  // Delete each grade for the selected class
+  for (const g of grades) {
+    try {
+      await deleteGrade(g.id);
+    } catch (e) {
+      console.error("Failed to delete grade", g.id, e);
+    }
+  }
+
+  await refreshClassData(id);
+  await recomputeGpa();
+  }
+
   /* ------------ Category handlers ------------ */
 
   async function onAddCategory(e) {
@@ -603,6 +628,16 @@ export default function ManualDashboard() {
 
             {/* BSD StudentVUE import (per selected class) */}
             <BsdStudentVueImport onImported={handleImportedGrades} />
+
+            {grades.length > 0 && (
+              <button
+                type="button"
+                className="link-danger mt"
+                onClick={onClearAllGrades}
+              >
+                Clear all grades for this class
+              </button>
+            )}
 
             <div className="table mt">
               <div className="thead">

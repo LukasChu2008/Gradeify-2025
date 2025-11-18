@@ -99,14 +99,14 @@ export default function BsdStudentVueImport({ onImported }) {
     <div className="mt">
       <details>
         <summary className="link">
-          Import from StudentVUE (BSD Content view)
+          Import from StudentVUE (BSD Course Content View)
         </summary>
         <div className="mt">
           <p className="muted">
-            In StudentVUE, open this class&apos;s <b>Gradebook Content</b> (the
+            In StudentVUE, open this class&apos;s <b>Gradebook Course Content</b> (the
             view that shows lines like &quot;Class assessment/in class work |
             10.00 points&quot;), select the assignments, copy, and paste the
-            text below. Must have included categories and weights exactly the same as StudentVue.
+            text below. Must have included categories and weights exactly the same as <StudentVUE></StudentVUE>.
           </p>
 
           <textarea
