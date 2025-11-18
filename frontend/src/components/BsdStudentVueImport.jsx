@@ -106,7 +106,7 @@ export default function BsdStudentVueImport({ onImported }) {
             In StudentVUE, open this class&apos;s <b>Gradebook Course Content</b> (the
             view that shows lines like &quot;Class assessment/in class work |
             10.00 points&quot;), select the assignments, copy, and paste the
-            text below. Must have included categories and weights exactly the same as <StudentVUE></StudentVUE>.
+            text below. Must have included categories and weights exactly the same as StudentVUE.
           </p>
 
           <textarea
