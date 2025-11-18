@@ -13,21 +13,46 @@ code {
     monospace;
 }
 
+/* Base font scaling */
+html {
+  font-size: 16px; /* default (medium) */
+}
+
+/* Font size variants */
+html[data-font-size="small"] {
+  font-size: 14px;
+}
+
+html[data-font-size="medium"] {
+  font-size: 16px;
+}
+
+html[data-font-size="large"] {
+  font-size: 18px;
+}
+
+/* Optional: use rem-based sizing so it all scales nicely */
+body, .page, .input, .btn {
+  font-size: 1rem;
+}
+
 /* ---- App background: respect theme ---- */
 
-/* Light mode: keep your pastel gradient */
-:root:not([data-theme="dark"]) html,
-:root:not([data-theme="dark"]) body,
-:root:not([data-theme="dark"]) #root {
+/* Make sure layout can fill the viewport */
+html,
+body,
+#root {
   height: 100%;
+}
+
+/* Light mode: pastel gradient */
+html:not([data-theme="dark"]) {
   background: linear-gradient(135deg, #fce7f3, #dbeafe, #e0f2fe);
 }
 
-/* Dark mode: solid dark (or swap for your dark gradient) */
-:root[data-theme="dark"] html,
-:root[data-theme="dark"] body,
-:root[data-theme="dark"] #root {
-  height: 100%;
-  background: #0d111a;            /* or: linear-gradient(135deg,#0b1020,#0d1326) */
+/* Dark mode: solid dark (or your dark gradient) */
+html[data-theme="dark"] {
+  background: #0d111a; /* or a dark gradient if you want */
   background-image: none;
 }
+

@@ -1,5 +1,5 @@
 // src/pages/Settings.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ui.css";
 import {
@@ -16,6 +16,13 @@ function applyTheme(theme) {
   try { localStorage.setItem("gradeify_theme", t); } catch {}
 }
 
+function applyFontSize(size) {
+  const allowed = ["small", "medium", "large"];
+  const s = allowed.includes(size) ? size : "medium";
+  document.documentElement.setAttribute("data-font-size", s);
+  try { localStorage.setItem("gradeify_font_size", s); } catch {}
+}
+
 export default function SettingsPage() {
   const nav = useNavigate();
 
@@ -26,6 +33,7 @@ export default function SettingsPage() {
 
   // prefs
   const [theme, setTheme] = useState("light");
+  const [fontSize, setFontSize] = useState("medium");  
 
   // profile
   const [username, setUsername] = useState("");     // current
@@ -35,6 +43,68 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
+
+    // ref for input to keep focus stable
+  const usernameInputRef = useRef(null);
+  const currentPasswordRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmPwRef   = useRef(null);
+  
+
+  // (Optional) mount debugging to see if SettingsPage is remounting
+  useEffect(() => {
+    console.log("SettingsPage mounted");
+    return () => console.log("SettingsPage unmounted");
+  }, []);
+
+  // If something causes a re-render/remount and steals focus,
+  // this puts it back in the username box while you're typing.
+  useEffect(() => {
+    if (!usernameInputRef.current) return;
+    // Only try to keep focus if you're actively editing (non-empty)
+    if (newUsername !== "" && document.activeElement !== usernameInputRef.current) {
+      const el = usernameInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len); // cursor at end
+    }
+  }, [newUsername]);
+
+  // Keep focus in "Current password" while typing
+useEffect(() => {
+  if (!currentPasswordRef.current) return;
+  if (
+    currentPassword !== "" &&
+    document.activeElement !== currentPasswordRef.current
+  ) {
+    const el = currentPasswordRef.current;
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }
+}, [currentPassword]);
+
+// Keep focus in "New password" while typing
+useEffect(() => {
+  if (!newPasswordRef.current) return;
+  if (newPassword !== "" && document.activeElement !== newPasswordRef.current) {
+    const el = newPasswordRef.current;
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }
+}, [newPassword]);
+
+// Keep focus in "Confirm new password" while typing
+useEffect(() => {
+  if (!confirmPwRef.current) return;
+  if (confirmPw !== "" && document.activeElement !== confirmPwRef.current) {
+    const el = confirmPwRef.current;
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }
+}, [confirmPw]);
 
   // -------- Floating toast (no layout changes) --------
   function Toast() {
@@ -96,6 +166,9 @@ useEffect(() => {
         const t = p.theme || "light";
         setTheme(t);
         applyTheme(t);
+        const fs = p.fontSize || localStorage.getItem("gradeify_font_size") || "medium";
+        setFontSize(fs);
+        applyFontSize(fs);
         setUsername(prof.username || "");
       } catch (e) {
         setErr(e.message || "Failed to load settings.");
@@ -105,18 +178,27 @@ useEffect(() => {
     })();
   }, []);
 
-  async function onSaveTheme(e) {
+  async function onSaveAppearance(e) {
     e.preventDefault();
-    setErr(""); setMsg("");
+    setErr("");
+    setMsg("");
+
     try {
       const t = theme === "dark" ? "dark" : "light";
-      await savePreferences({ theme: t });
-      applyTheme(t); // immediate
-      setMsg("Theme saved.");
+      const allowed = ["small", "medium", "large"];
+      const fs = allowed.includes(fontSize) ? fontSize : "medium";
+
+      await savePreferences({ theme: t, fontSize: fs });
+
+      applyTheme(t);
+      applyFontSize(fs);
+
+      setMsg("Appearance settings saved.");
     } catch (e) {
-      setErr(e.message || "Failed to save theme.");
+      setErr(e.message || "Failed to save appearance.");
     }
-  }
+}
+
 
   async function onSaveUsername(e) {
     e.preventDefault(); // prevent page reload → avoids jump
@@ -189,7 +271,12 @@ useEffect(() => {
       <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: "1rem" }}>
         {/* Theme */}
         <Card title="Appearance">
-          <form className="grid3" onSubmit={onSaveTheme} onKeyDown={preventEnterSubmit}>
+          <form
+            className="grid3"
+            onSubmit={onSaveAppearance}
+            onKeyDown={preventEnterSubmit}
+          >
+            {/* Theme row */}
             <label className="muted">Theme</label>
             <select
               className="input"
@@ -200,12 +287,28 @@ useEffect(() => {
               <option value="dark">Dark</option>
             </select>
             <div />
+
+            {/* Font size row */}
+            <label className="muted">Font size</label>
+            <select
+              className="input"
+              value={fontSize}
+              onChange={(e) => setFontSize(e.target.value)}
+            >
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+            <div />
+
+            {/* Save button row */}
             <div />
             <div style={{ textAlign: "right" }}>
-              <button className="btn" type="submit">Save Theme</button>
+              <button className="btn" type="submit">Save appearance</button>
             </div>
           </form>
         </Card>
+
 
         {/* Username */}
         <Card title="Change Username">
@@ -217,6 +320,7 @@ useEffect(() => {
             <input
               id="new-username"
               className="input"
+              ref={usernameInputRef}    
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               placeholder="New username"
@@ -239,6 +343,7 @@ useEffect(() => {
               id="cur-pw"
               className="input"
               type="password"
+              ref={currentPasswordRef}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
@@ -251,6 +356,7 @@ useEffect(() => {
               id="new-pw"
               className="input"
               type="password"
+              ref={newPasswordRef}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
@@ -263,6 +369,7 @@ useEffect(() => {
               id="confirm-pw"
               className="input"
               type="password"
+              ref={confirmPwRef}
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
               autoComplete="new-password"

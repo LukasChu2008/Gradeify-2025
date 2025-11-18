@@ -113,3 +113,9 @@
 .link:hover {
   text-decoration: underline;
 }
+
+.edit-remove {
+  display: flex;
+  gap: 10px;    /* adjust to 12px or 16px if you want */
+  align-items: center;
+}
