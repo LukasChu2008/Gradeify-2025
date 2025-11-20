@@ -1,0 +1,85 @@
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #f5f3ff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.sidebar {
+  width: 240px;
+  padding: 24px 20px;
+  background: white;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.logo {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-link {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.95rem;
+  color: #4b4b7a;
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
+}
+
+.nav-link:hover {
+  background: #ece9ff;
+  transform: translateY(-1px);
+}
+
+.nav-link.active {
+  background: #4f46e5;
+  color: white;
+  font-weight: 600;
+}
+
+.main {
+  flex: 1;
+  padding: 8px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* topbar is just a container for the sign-out button */
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* so your page content can fill the rest */
+.content {
+  flex: 1;
+  padding-top: 0; /* or 0 if you want it flush */
+}
+
+/* sign out button style */
+.signout-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: #ef4444;
+  color: white;
+  font-size: 0.85rem;
+}
+.signout-btn:hover {
+  opacity: 0.9;
+}

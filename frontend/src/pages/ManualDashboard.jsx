@@ -385,19 +385,12 @@ export default function ManualDashboard() {
   return (
     <div className="page">
       <header className="topbar">
-        <div className="title">Gradeify</div>
         <div className="right">
           {user && (
             <span className="muted">
               Signed in as <b>{user.username}</b>
             </span>
           )}
-          <button className="btn" onClick={() => nav("/settings")}>
-            Settings
-          </button>
-          <button className="btn" onClick={onLogout}>
-            Sign out
-          </button>
         </div>
       </header>
 

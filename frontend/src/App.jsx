@@ -6,6 +6,9 @@ import AuthLogin from "./pages/AuthLogin.jsx";
 import Register from "./pages/Register.jsx";
 import ManualDashboard from "./pages/ManualDashboard.jsx";
 import SettingsPage from "./pages/Settings.jsx";
+import WelcomePage from "./pages/WelcomePage.jsx";
+import DashboardLayout from "./pages/DashboardLayout.jsx";
+
 import "./App.css";
 
 /* ---------------- ErrorBoundary ---------------- */
@@ -56,6 +59,15 @@ function ErrorBoundary({ children }) {
   return children;
 }
 
+/* simple placeholders for future sections */
+function LearnPage() {
+  return <p>Learning hub coming soon...</p>;
+}
+
+function ToolsPage() {
+  return <p>Tools and calculators coming soon...</p>;
+}
+
 /* ---------------- App ---------------- */
 export default function App() {
   const location = useLocation();
@@ -74,11 +86,32 @@ export default function App() {
   return (
     <ErrorBoundary>
       <Routes>
+        {/* auth + landing */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<AuthLogin />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/manual" element={<ManualDashboard />} />
-        <Route path="/settings" element={<SettingsPage />} />
+
+        {/* main app dashboard */}
+        <Route path="/app" element={<DashboardLayout />}>
+          {/* default: welcome page */}
+          <Route index element={<WelcomePage />} />
+          {/* classes = your ManualDashboard */}
+          <Route path="classes" element={<ManualDashboard />} />
+          {/* settings inside dashboard */}
+          <Route path="settings" element={<SettingsPage />} />
+          {/* placeholders for educational features */}
+          <Route path="learn" element={<LearnPage />} />
+          <Route path="tools" element={<ToolsPage />} />
+        </Route>
+
+        {/* backwards compatibility: old routes redirect into new ones */}
+        <Route path="/manual" element={<Navigate to="/app/classes" replace />} />
+        <Route
+          path="/settings"
+          element={<Navigate to="/app/settings" replace />}
+        />
+
+        {/* catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </ErrorBoundary>

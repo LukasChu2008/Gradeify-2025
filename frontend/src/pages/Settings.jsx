@@ -260,9 +260,6 @@ useEffect(() => {
         }}
       >
         <h1 style={{ margin: 0, color: "var(--brand)" }}>Settings</h1>
-        <button className="btn" type="button" onClick={() => nav("/manual")}>
-          ← Back to Dashboard
-        </button>
       </div>
 
       {/* Floating toast (no layout shift) */}
