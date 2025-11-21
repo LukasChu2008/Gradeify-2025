@@ -1,15 +1,18 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
-  background: #f5f3ff;
+  background: var(--bg);
+  color: var(--text);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
 
+/* Sidebar */
 .sidebar {
   width: 240px;
   padding: 24px 20px;
-  background: white;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
@@ -20,57 +23,55 @@
   font-size: 1.8rem;
   font-weight: 700;
   margin: 0;
+  color: var(--sidebar-text);
 }
 
-.nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+/* Nav buttons */
 .nav-link {
   display: block;
   padding: 10px 14px;
   border-radius: 999px;
   text-decoration: none;
   font-size: 0.95rem;
-  color: #4b4b7a;
+  color: var(--sidebar-text);
   background: transparent;
   transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
 }
 
 .nav-link:hover {
-  background: #ece9ff;
+  background: var(--accent-soft);
   transform: translateY(-1px);
 }
 
 .nav-link.active {
-  background: #4f46e5;
+  background: var(--accent);
   color: white;
   font-weight: 600;
 }
 
+/* Main layout */
 .main {
   flex: 1;
   padding: 8px 24px;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 
-/* topbar is just a container for the sign-out button */
+/* Top bar */
 .topbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 8px;
 }
 
-/* so your page content can fill the rest */
-.content {
-  flex: 1;
-  padding-top: 0; /* or 0 if you want it flush */
+.signed-in {
+  font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
-/* sign out button style */
+/* Sign out */
 .signout-btn {
   padding: 6px 12px;
   border-radius: 999px;
@@ -80,6 +81,13 @@
   color: white;
   font-size: 0.85rem;
 }
+
 .signout-btn:hover {
   opacity: 0.9;
+}
+
+/* Outlet area */
+.content {
+  flex: 1;
+  padding-top: 0;
 }

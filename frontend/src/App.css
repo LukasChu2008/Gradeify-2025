@@ -119,3 +119,10 @@
   gap: 10px;    /* adjust to 12px or 16px if you want */
   align-items: center;
 }
+
+.page-wide {
+  max-width: 1500px;       /* stretch across most of the screen */
+  width: 100%;
+  margin: 8px auto 24px;   /* small top/bottom margin, centered */
+}
+

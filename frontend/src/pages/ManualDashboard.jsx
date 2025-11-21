@@ -384,15 +384,6 @@ export default function ManualDashboard() {
 
   return (
     <div className="page">
-      <header className="topbar">
-        <div className="right">
-          {user && (
-            <span className="muted">
-              Signed in as <b>{user.username}</b>
-            </span>
-          )}
-        </div>
-      </header>
 
       {err && <div className="alert">{err}</div>}
 

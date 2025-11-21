@@ -14,7 +14,13 @@ body {
 }
 
 /* Page max width wrapper */
-.page { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.page {
+  width: 100%;
+  max-width: 2000px;      /* let it stretch across most of the screen */
+  margin: 8px auto 24px;  /* much less empty space at the top */
+  padding: 0 12px;        /* small side padding so it doesn’t hug the edges */
+}
+
 
 /* ---------- LIGHT TOKENS (default) ---------- */
 :root {

@@ -259,7 +259,6 @@ useEffect(() => {
           gap: 12,
         }}
       >
-        <h1 style={{ margin: 0, color: "var(--brand)" }}>Settings</h1>
       </div>
 
       {/* Floating toast (no layout shift) */}

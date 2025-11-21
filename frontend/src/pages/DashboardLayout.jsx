@@ -1,16 +1,30 @@
 // src/pages/DashboardLayout.jsx
+import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { me } from "../api/manual";          // 👈 get current user from API
 import "./DashboardLayout.css";
 
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState(null);
 
   const isActive = (path) =>
     location.pathname === path ? "nav-link active" : "nav-link";
 
+  // load user on mount
+  useEffect(() => {
+    me()
+      .then((res) => {
+        if (res?.user) setCurrentUser(res.user);
+      })
+      .catch(() => {
+        // if this fails, you could optionally navigate to /login
+      });
+  }, []);
+
   const handleSignOut = () => {
-    localStorage.removeItem("gradeify_user"); // adjust key if needed
+    // TODO: if you add a logout API, call it here
     navigate("/login", { replace: true });
   };
 
@@ -40,6 +54,9 @@ export default function DashboardLayout() {
 
       <main className="main">
         <header className="topbar">
+          <span className="signed-in">
+            {currentUser ? `Signed in as ${currentUser.username}` : ""}
+          </span>
           <button className="signout-btn" onClick={handleSignOut}>
             Sign out
           </button>
