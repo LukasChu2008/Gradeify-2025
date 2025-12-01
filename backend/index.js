@@ -8,10 +8,16 @@ import bcrypt from "bcryptjs";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { supabase, newId } from "./db.js";
+import OpenAI from "openai";
 
 dotenv.config();
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 const app = express();
+
 
 /* ----------- ORIGIN NORMALIZATION + PROXY TRUST ----------- */
 const rawOrigin = (process.env.CLIENT_ORIGIN || "http://localhost:5173").replace(/\/$/, "");
@@ -55,6 +61,80 @@ function requireUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: "Not logged in" });
   next();
 }
+
+
+function buildPrompt({ subject, topic, difficulty, numQuestions }) {
+  return `
+You are an expert teacher creating practice tests.
+
+Create a ${numQuestions}-question practice test for:
+- Subject: ${subject}
+- Topic: ${topic}
+- Difficulty: ${difficulty}
+
+Rules:
+- Questions must be appropriate for ${subject} level.
+- Format the response as pure JSON with this structure:
+
+{
+  "subject": "...",
+  "topic": "...",
+  "difficulty": "...",
+  "questions": [
+    {
+      "id": 1,
+      "question": "string",
+      "choices": ["A", "B", "C", "D"],
+      "answer": "string",
+      "explanation": "string"
+    }
+  ]
+}
+
+If multiple choice is not appropriate, leave "choices" as an empty array [].
+Do NOT include any text before or after the JSON.
+`;
+}
+
+app.post("/api/generate-practice", async (req, res) => {
+  try {
+    const { subject, topic, difficulty, numQuestions } = req.body;
+
+    if (!subject || !topic || !difficulty || !numQuestions) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const prompt = buildPrompt({
+      subject,
+      topic,
+      difficulty,
+      numQuestions,
+    });
+
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: prompt,
+    });
+
+    const text = response.output[0].content[0].text;
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("Failed to parse JSON from model:", err);
+      return res.status(500).json({
+        error: "Model did not return valid JSON. Try again.",
+        raw: text,
+      });
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error("Error generating practice:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 /* ---------------------------- DEBUG ---------------------------- */
 // Are we alive?

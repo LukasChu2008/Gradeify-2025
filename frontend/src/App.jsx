@@ -11,6 +11,8 @@ import DashboardLayout from "./pages/DashboardLayout.jsx";
 
 import "./App.css";
 
+import PracticeGenerator from "./components/PracticeGenerator";
+
 /* ---------------- ErrorBoundary ---------------- */
 function ErrorBoundary({ children }) {
   const [err, setErr] = useState(null);
@@ -59,9 +61,16 @@ function ErrorBoundary({ children }) {
   return children;
 }
 
-/* simple placeholders for future sections */
+/* ---------------- Pages for new sections ---------------- */
+
 function LearnPage() {
-  return <p>Learning hub coming soon...</p>;
+  // Put your PracticeGenerator in the Learn section of the dashboard
+  return (
+    <div style={{ padding: 16 }}>
+      <h1 className="text-2xl font-bold mb-4">Learn – Practice Generator</h1>
+      <PracticeGenerator />
+    </div>
+  );
 }
 
 function ToolsPage() {
@@ -99,7 +108,7 @@ export default function App() {
           <Route path="classes" element={<ManualDashboard />} />
           {/* settings inside dashboard */}
           <Route path="settings" element={<SettingsPage />} />
-          {/* placeholders for educational features */}
+          {/* educational features */}
           <Route path="learn" element={<LearnPage />} />
           <Route path="tools" element={<ToolsPage />} />
         </Route>

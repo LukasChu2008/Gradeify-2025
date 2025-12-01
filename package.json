@@ -1,5 +1,9 @@
 {
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.0",
+    "openai": "^6.9.1",
     "studentvue.js": "^0.1.1"
   }
 }
