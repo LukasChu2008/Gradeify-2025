@@ -41,7 +41,7 @@ export default function DashboardLayout() {
             Classes
           </Link>
           <Link to="/app/learn" className={isActive("/app/learn")}>
-            Learn (soon)
+            Learn
           </Link>
           <Link to="/app/tools" className={isActive("/app/tools")}>
             Tools (soon)

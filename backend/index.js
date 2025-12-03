@@ -95,6 +95,27 @@ If multiple choice is not appropriate, leave "choices" as an empty array [].
 Do NOT include any text before or after the JSON.
 `;
 }
+function safeParseJSON(value) {
+  // If the model already gave us an object, just use it
+  if (value && typeof value === "object") {
+    return value;
+  }
+
+  const text = String(value ?? "");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start !== -1 && end !== -1) {
+      const jsonSlice = text.slice(start, end + 1);
+      return JSON.parse(jsonSlice);
+    }
+    throw new Error("Could not parse JSON");
+  }
+}
+
 
 app.post("/api/generate-practice", async (req, res) => {
   try {
@@ -112,22 +133,40 @@ app.post("/api/generate-practice", async (req, res) => {
     });
 
     const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-    });
+  model: "gpt-4.1-mini",
+  input: prompt,
+  response_format: { type: "json_object" },
+});
 
-    const text = response.output[0].content[0].text;
-    let data;
+// The Responses API can return either text or a JSON blob depending on format
+const message = response.output[0]?.content[0];
 
-    try {
-      data = JSON.parse(text);
-    } catch (err) {
-      console.error("Failed to parse JSON from model:", err);
-      return res.status(500).json({
-        error: "Model did not return valid JSON. Try again.",
-        raw: text,
-      });
-    }
+let rawPayload;
+if (!message) {
+  throw new Error("No content returned from model");
+}
+
+if (message.type === "output_text") {
+  rawPayload = message.text;
+} else if (message.type === "output_json") {
+  // When response_format is json_object you may get a JSON object here
+  rawPayload = message.json;
+} else {
+  // Fallback – just log whatever we got
+  console.warn("Unexpected message type from OpenAI:", message);
+  rawPayload = message.text || message.json || "";
+}
+
+let data;
+try {
+  data = safeParseJSON(rawPayload);
+} catch (err) {
+  console.error("Failed to parse JSON from model:", rawPayload, err);
+  return res.status(500).json({
+    error: "Model did not return valid JSON. Try again.",
+  });
+}
+
 
     return res.json(data);
   } catch (err) {

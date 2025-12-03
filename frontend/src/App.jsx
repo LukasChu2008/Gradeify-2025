@@ -9,9 +9,10 @@ import SettingsPage from "./pages/Settings.jsx";
 import WelcomePage from "./pages/WelcomePage.jsx";
 import DashboardLayout from "./pages/DashboardLayout.jsx";
 
-import "./App.css";
+// use the Learn page file we created
+import LearnPage from "./pages/Learn.jsx";
 
-import PracticeGenerator from "./components/PracticeGenerator";
+import "./App.css";
 
 /* ---------------- ErrorBoundary ---------------- */
 function ErrorBoundary({ children }) {
@@ -30,7 +31,7 @@ function ErrorBoundary({ children }) {
 
   useEffect(() => {
     if (err) setErr(null);
-  }, [location.pathname]);
+  }, [location.pathname, err]);
 
   if (err) {
     return (
@@ -61,18 +62,7 @@ function ErrorBoundary({ children }) {
   return children;
 }
 
-/* ---------------- Pages for new sections ---------------- */
-
-function LearnPage() {
-  // Put your PracticeGenerator in the Learn section of the dashboard
-  return (
-    <div style={{ padding: 16 }}>
-      <h1 className="text-2xl font-bold mb-4">Learn – Practice Generator</h1>
-      <PracticeGenerator />
-    </div>
-  );
-}
-
+/* simple placeholder for Tools page */
 function ToolsPage() {
   return <p>Tools and calculators coming soon...</p>;
 }
