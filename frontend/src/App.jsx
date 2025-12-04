@@ -70,17 +70,24 @@ function ToolsPage() {
 /* ---------------- App ---------------- */
 export default function App() {
   const location = useLocation();
+  const [theme, setTheme] = useState("light");
 
   // Force light mode on /login and /register; otherwise use saved theme.
   useEffect(() => {
     const forceLight = ["/login", "/register"].includes(location.pathname);
     const saved =
       localStorage.getItem("gradeify_theme") === "dark" ? "dark" : "light";
-    document.documentElement.setAttribute(
-      "data-theme",
-      forceLight ? "light" : saved
-    );
+
+    const effectiveTheme = forceLight ? "light" : saved;
+
+    // update <html data-theme="...">
+    document.documentElement.setAttribute("data-theme", effectiveTheme);
+
+    // keep React state in sync so we can pass it to pages
+    setTheme(effectiveTheme);
   }, [location.pathname]);
+
+  const isDarkMode = theme === "dark";
 
   return (
     <ErrorBoundary>
@@ -99,7 +106,7 @@ export default function App() {
           {/* settings inside dashboard */}
           <Route path="settings" element={<SettingsPage />} />
           {/* educational features */}
-          <Route path="learn" element={<LearnPage />} />
+          <Route path="learn" element={<LearnPage isDarkMode={isDarkMode} />} />
           <Route path="tools" element={<ToolsPage />} />
         </Route>
 
@@ -116,3 +123,4 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+

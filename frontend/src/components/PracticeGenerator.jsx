@@ -1,13 +1,16 @@
 // src/components/PracticeGenerator.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const sectionCard = {
+const STORAGE_KEY = "gradeify_practice_state_v1";
+
+// Theme-aware styles
+const getSectionCard = (isDark) => ({
   borderRadius: "18px",
-  border: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  border: `1px solid ${isDark ? "#374151" : "#e5e7eb"}`,
+  background: isDark ? "#111827" : "#f9fafb",
   padding: "16px 18px",
   marginBottom: "16px",
-};
+});
 
 const labelStyle = {
   display: "block",
@@ -26,7 +29,11 @@ const inputStyle = {
 };
 
 const selectStyle = { ...inputStyle };
-const smallText = { fontSize: "12px", color: "#6b7280" };
+
+const getSmallText = (isDark) => ({
+  fontSize: "12px",
+  color: isDark ? "#9ca3af" : "#6b7280",
+});
 
 const primaryButton = {
   padding: "8px 14px",
@@ -44,14 +51,58 @@ const secondaryButton = {
   background: "#059669",
 };
 
-const questionCard = {
-  background: "white",
+const getQuestionCard = (isDark) => ({
+  background: isDark ? "#020617" : "white",
   borderRadius: "14px",
-  border: "1px solid #e5e7eb",
+  border: `1px solid ${isDark ? "#374151" : "#e5e7eb"}`,
   padding: "12px 14px",
-};
+});
 
-export default function PracticeGenerator() {
+const OPTION_LETTERS = ["a", "b", "c", "d", "e", "f"];
+
+// Normalize for comparison: lowercase & strip non-alphanumerics
+function normalizeText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function getCorrectAnswerInfo(q) {
+  const raw = String(q.answer ?? "").trim();
+  if (!raw) {
+    return { normalized: "", display: "" };
+  }
+
+  const first = raw[0].toLowerCase();
+
+  // handle "B", "b", "B.", "b)", "B: P = I^2R", etc.
+  const looksLikeLetter =
+    OPTION_LETTERS.includes(first) &&
+    (raw.length === 1 ||
+      raw[1] === "." ||
+      raw[1] === ")" ||
+      raw[1] === ":" ||
+      raw[1] === " ");
+
+  if (looksLikeLetter && Array.isArray(q.choices) && q.choices.length) {
+    const idx = OPTION_LETTERS.indexOf(first);
+    const choiceText = q.choices[idx];
+
+    return {
+      normalized: normalizeText(choiceText ?? first),
+      display: first.toUpperCase(),   // <-- only show "A", "B", "C", etc.
+    };
+
+  }
+
+  // Otherwise treat the answer as the full text
+  return {
+    normalized: normalizeText(raw),
+    display: raw,
+  };
+}
+
+export default function PracticeGenerator({ isDarkMode = false }) {
   const [subject, setSubject] = useState("");
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
@@ -63,6 +114,67 @@ export default function PracticeGenerator() {
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState(null);
+
+  // Restore from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+
+      // If submitted previously, do NOT restore the test — clear it.
+      if (saved.submitted === true) {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+
+      if (saved.subject) setSubject(saved.subject);
+      if (saved.topic) setTopic(saved.topic);
+      if (saved.difficulty) setDifficulty(saved.difficulty);
+      if (typeof saved.numQuestions === "number") setNumQuestions(saved.numQuestions);
+
+      if (saved.testData) setTestData(saved.testData);
+      if (saved.selectedAnswers) setSelectedAnswers(saved.selectedAnswers);
+      if (typeof saved.submitted === "boolean") setSubmitted(saved.submitted);
+      if (saved.results) setResults(saved.results);
+    } catch (e) {
+      console.error("Failed to restore practice state:", e);
+    }
+  }, []);
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    // If the test is finished, remove it instead of saving it.
+    if (submitted === true) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+
+    try {
+      const payload = {
+        subject,
+        topic,
+        difficulty,
+        numQuestions,
+        testData,
+        selectedAnswers,
+        submitted,
+        results,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.error("Failed to save practice state:", e);
+    }
+  }, [
+    subject,
+    topic,
+    difficulty,
+    numQuestions,
+    testData,
+    selectedAnswers,
+    submitted,
+    results,
+  ]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -111,10 +223,12 @@ export default function PracticeGenerator() {
     let correctCount = 0;
     const perQuestion = testData.questions.map((q) => {
       const userAnswer = selectedAnswers[q.id];
-      const correctAnswer = String(q.answer ?? "").trim().toLowerCase();
-      const userNorm = String(userAnswer ?? "").trim().toLowerCase();
-      const isCorrect = !!userAnswer && userNorm === correctAnswer;
+      const userNorm = normalizeText(userAnswer);
+      const { normalized: correctNorm } = getCorrectAnswerInfo(q);
+
+      const isCorrect = !!userAnswer && userNorm === correctNorm;
       if (isCorrect) correctCount++;
+
       return { id: q.id, correct: isCorrect, userAnswer };
     });
 
@@ -132,8 +246,15 @@ export default function PracticeGenerator() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Generator card */}
-      <section style={sectionCard}>
-        <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px" }}>
+      <section style={getSectionCard(isDarkMode)}>
+        <h2
+          style={{
+            fontSize: "18px",
+            fontWeight: 600,
+            marginBottom: "8px",
+            color: isDarkMode ? "#e5e7eb" : "#111827",
+          }}
+        >
           AI Practice Test Generator
         </h2>
 
@@ -241,7 +362,12 @@ export default function PracticeGenerator() {
 
       {/* Quiz card */}
       {testData && (
-        <section style={{ ...sectionCard, background: "#f3f4f6" }}>
+        <section
+          style={{
+            ...getSectionCard(isDarkMode),
+            background: isDarkMode ? "#020617" : "#f3f4f6",
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -257,11 +383,12 @@ export default function PracticeGenerator() {
                   fontSize: "16px",
                   fontWeight: 600,
                   marginBottom: "2px",
+                  color: isDarkMode ? "#e5e7eb" : "#111827",
                 }}
               >
                 {testData.subject} – {testData.topic} ({testData.difficulty})
               </h3>
-              <p style={smallText}>
+              <p style={getSmallText(isDarkMode)}>
                 Select your answers, then click{" "}
                 <strong>Submit Answers</strong> to see your score.
               </p>
@@ -269,10 +396,16 @@ export default function PracticeGenerator() {
 
             {results && (
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "14px", fontWeight: 600 }}>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: isDarkMode ? "#e5e7eb" : "#111827",
+                  }}
+                >
                   Score: {results.score} / {results.total}
                 </div>
-                <div style={smallText}>
+                <div style={getSmallText(isDarkMode)}>
                   {Math.round((results.score / results.total) * 100)}%
                 </div>
               </div>
@@ -293,13 +426,13 @@ export default function PracticeGenerator() {
               const isCorrect = result?.correct;
               const userAnswer = selectedAnswers[q.id];
 
-              let borderColor = "#e5e7eb";
+              let borderColor = isDarkMode ? "#374151" : "#e5e7eb";
               if (submitted && isCorrect === true) borderColor = "#4ade80";
               if (submitted && isCorrect === false) borderColor = "#f97373";
 
               return (
                 <li key={q.id}>
-                  <div style={{ ...questionCard, borderColor }}>
+                  <div style={{ ...getQuestionCard(isDarkMode), borderColor }}>
                     <div
                       style={{
                         display: "flex",
@@ -312,6 +445,7 @@ export default function PracticeGenerator() {
                           fontSize: "14px",
                           fontWeight: 500,
                           marginBottom: "6px",
+                          color: isDarkMode ? "#e5e7eb" : "#111827",
                         }}
                       >
                         {q.question}
@@ -334,7 +468,13 @@ export default function PracticeGenerator() {
 
                     {/* choices or free response */}
                     {q.choices && q.choices.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
                         {q.choices.map((choice, idx) => (
                           <label
                             key={idx}
@@ -344,6 +484,7 @@ export default function PracticeGenerator() {
                               gap: "6px",
                               fontSize: "13px",
                               cursor: submitted ? "default" : "pointer",
+                              color: isDarkMode ? "#e5e7eb" : "#111827",
                             }}
                           >
                             <input
@@ -352,9 +493,7 @@ export default function PracticeGenerator() {
                               value={choice}
                               disabled={submitted}
                               checked={userAnswer === choice}
-                              onChange={() =>
-                                handleChoiceChange(q.id, choice)
-                              }
+                              onChange={() => handleChoiceChange(q.id, choice)}
                             />
                             <span>{choice}</span>
                           </label>
@@ -374,10 +513,16 @@ export default function PracticeGenerator() {
 
                     {/* explanation after submit */}
                     {submitted && (
-                      <div style={{ marginTop: "6px", fontSize: "12px" }}>
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          fontSize: "12px",
+                          color: isDarkMode ? "#e5e7eb" : "#111827",
+                        }}
+                      >
                         <p>
                           <strong>Correct answer:</strong>{" "}
-                          {String(q.answer)}
+                          {getCorrectAnswerInfo(q).display}
                         </p>
                         {q.explanation && (
                           <p style={{ marginTop: "3px" }}>

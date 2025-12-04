@@ -134,11 +134,14 @@ app.post("/api/generate-practice", async (req, res) => {
     });
 
     const response = await openai.responses.create({
-  model: "gpt-4.1-mini",
-  input: prompt,
-  // 👇 new way: ask for JSON via text.format
-  text: { format: "json" },
-});
+      model: "gpt-4.1-mini",
+      input: prompt,
+      // ✅ JSON mode for Responses API
+      text: {
+        format: { type: "json_object" },
+      },
+    });
+
 
 // Response shape: response.output[0].content is an array of text chunks
 const content = response.output?.[0]?.content || [];
