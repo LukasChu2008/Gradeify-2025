@@ -12,6 +12,7 @@ import OpenAI from "openai";
 
 dotenv.config();
 
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -135,38 +136,33 @@ app.post("/api/generate-practice", async (req, res) => {
     const response = await openai.responses.create({
   model: "gpt-4.1-mini",
   input: prompt,
-  response_format: { type: "json_object" },
+  // 👇 new way: ask for JSON via text.format
+  text: { format: "json" },
 });
 
-// The Responses API can return either text or a JSON blob depending on format
-const message = response.output[0]?.content[0];
+// Response shape: response.output[0].content is an array of text chunks
+const content = response.output?.[0]?.content || [];
 
-let rawPayload;
-if (!message) {
-  throw new Error("No content returned from model");
+if (!content.length) {
+  throw new Error("No content returned from OpenAI");
 }
 
-if (message.type === "output_text") {
-  rawPayload = message.text;
-} else if (message.type === "output_json") {
-  // When response_format is json_object you may get a JSON object here
-  rawPayload = message.json;
-} else {
-  // Fallback – just log whatever we got
-  console.warn("Unexpected message type from OpenAI:", message);
-  rawPayload = message.text || message.json || "";
+// Join all text parts together
+const rawText = content
+  .map((part) => part.text || "")
+  .join("\n")
+  .trim();
+
+console.log("🧾 Raw text from OpenAI (truncated):", rawText.slice(0, 200));
+
+const data = safeParseJSON(rawText);
+
+// basic sanity check
+if (!data || !Array.isArray(data.questions)) {
+  throw new Error("AI response missing a valid questions array");
 }
 
-let data;
-try {
-  data = safeParseJSON(rawPayload);
-} catch (err) {
-  console.error("Failed to parse JSON from model:", rawPayload, err);
-  return res.status(500).json({
-    error: "Model did not return valid JSON. Try again.",
-  });
-}
-
+return res.json(data);
 
     return res.json(data);
   } catch (err) {
