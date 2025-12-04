@@ -9,6 +9,7 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { supabase, newId } from "./db.js";
 import OpenAI from "openai";
+import StudentVue from "studentvue";
 
 dotenv.config();
 
@@ -133,46 +134,84 @@ app.post("/api/generate-practice", async (req, res) => {
       numQuestions,
     });
 
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      // ✅ JSON mode for Responses API
-      text: {
-        format: { type: "json_object" },
-      },
+       const response = await openai.responses.create({
+          model: "gpt-4.1-mini",
+          input: prompt,
+          // ✅ JSON mode for Responses API
+          text: {
+            format: { type: "json_object" },
+          },
+        });
+
+        // Response shape: response.output[0].content is an array of text chunks
+        const content = response.output?.[0]?.content || [];
+
+        if (!content.length) {
+          throw new Error("No content returned from OpenAI");
+        }
+
+        // Join all text parts together
+        const rawText = content
+          .map((part) => part.text || "")
+          .join("\n")
+          .trim();
+
+        console.log("🧾 Raw text from OpenAI (truncated):", rawText.slice(0, 200));
+
+        const data = safeParseJSON(rawText);
+
+        // basic sanity check
+        if (!data || !Array.isArray(data.questions)) {
+          throw new Error("AI response missing a valid questions array");
+        }
+
+        return res.json(data);
+      } catch (err) {
+        console.error("Error generating practice:", err);
+        return res.status(500).json({ error: "Internal server error" });
+      }
     });
 
+// Simple StudentVUE preview route (no DB writes yet)
+    app.post("/api/studentvue/preview", requireUser, async (req, res) => {
+      try {
+        const { districtUrl, username, password } = req.body || {};
 
-// Response shape: response.output[0].content is an array of text chunks
-const content = response.output?.[0]?.content || [];
+        if (!districtUrl || !username || !password) {
+          return res
+            .status(400)
+            .json({ error: "Missing districtUrl, username, or password." });
+        }
 
-if (!content.length) {
-  throw new Error("No content returned from OpenAI");
-}
+        console.log("🔎 StudentVUE preview hit", { districtUrl, username });
 
-// Join all text parts together
-const rawText = content
-  .map((part) => part.text || "")
-  .join("\n")
-  .trim();
+        // 1) Login to StudentVUE
+        const client = await StudentVue.login(districtUrl, {
+          username,
+          password,
+        });
 
-console.log("🧾 Raw text from OpenAI (truncated):", rawText.slice(0, 200));
+        // 2) Fetch gradebook
+        const gradebook = await client.getGradebook({});
 
-const data = safeParseJSON(rawText);
+        // 3) Only send back what we need for now
+        return res.json({
+          ok: true,
+          gradebook,
+        });
+      } catch (err) {
+        console.error("StudentVUE import error:", err);
 
-// basic sanity check
-if (!data || !Array.isArray(data.questions)) {
-  throw new Error("AI response missing a valid questions array");
-}
+        const msg = err?.message || "Failed to import from StudentVUE.";
+        if (msg.toLowerCase().includes("invalid credentials")) {
+          return res
+            .status(401)
+            .json({ error: "Invalid StudentVUE username/password." });
+        }
 
-return res.json(data);
-
-    return res.json(data);
-  } catch (err) {
-    console.error("Error generating practice:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+        return res.status(500).json({ error: msg });
+      }
+    });
 
 /* ---------------------------- DEBUG ---------------------------- */
 // Are we alive?

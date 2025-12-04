@@ -18,6 +18,7 @@ import {
 } from "../api/manual";
 import "./ui.css";
 import BsdStudentVueImport from "../components/BsdStudentVueImport.jsx";
+import StudentVueImport from "../components/StudentVueImport";
 
 /* ------------ Helpers ------------ */
 
@@ -612,6 +613,8 @@ export default function ManualDashboard() {
 
             {/* BSD StudentVUE import (per selected class) */}
             <BsdStudentVueImport onImported={handleImportedGrades} />
+            <StudentVueImport onImported={handleImportedGrades} />
+
 
             {grades.length > 0 && (
               <button
