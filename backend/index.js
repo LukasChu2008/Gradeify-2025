@@ -213,6 +213,94 @@ app.post("/api/generate-practice", async (req, res) => {
       }
     });
 
+    // BSD Chrome extension -> import classes from StudentVUE
+  app.post("/api/import/studentvue", requireUser, async (req, res) => {
+    try {
+      const userId = req.session.userId;
+      const { mode, classes } = req.body || {};
+
+      // Expect the extension to send: { mode: "classes", classes: [...] }
+      if (mode !== "classes" || !Array.isArray(classes) || classes.length === 0) {
+        return res.status(400).json({ error: "Expected mode='classes' and a non-empty classes array." });
+      }
+
+      // 1) Fetch existing classes for this user so we don't duplicate on repeated imports
+      const { data: existing, error: existingErr } = await supabase
+        .from("classes")
+        .select("id, name, period")
+        .eq("user_id", userId);
+
+      if (existingErr) {
+        console.error("Import: error loading existing classes:", existingErr);
+        return res.status(500).json({ error: "Failed to load existing classes." });
+      }
+
+      const existingKeys = new Set(
+        (existing || []).map((c) => `${c.name.trim().toLowerCase()}|${c.period ?? ""}`)
+      );
+
+      // 2) Build new class rows to insert
+      const rowsToInsert = [];
+
+      for (const c of classes) {
+        const name = (c.courseName || "").trim();
+        if (!name) continue;
+
+        // BSD periods will usually be "1:", "2:", etc. – try to pull a number if present
+        let period = c.period;
+        if (typeof period === "string") {
+          const match = period.match(/\d+/);
+          period = match ? Number(match[0]) : null;
+        }
+
+        const teacher = c.teacher || null;
+
+        const key = `${name.toLowerCase()}|${period ?? ""}`;
+        if (existingKeys.has(key)) {
+          // already have this class for this user; skip to avoid duplicates
+          continue;
+        }
+
+        rowsToInsert.push({
+          user_id: userId,
+          name,
+          period,
+          teacher,
+          // weight left null; user can edit later in UI
+        });
+      }
+
+      if (rowsToInsert.length === 0) {
+        return res.json({
+          ok: true,
+          inserted: 0,
+          note: "No new classes to import (everything already exists).",
+        });
+      }
+
+      // 3) Insert new classes
+      const { data: inserted, error: insertErr } = await supabase
+        .from("classes")
+        .insert(rowsToInsert)
+        .select();
+
+      if (insertErr) {
+        console.error("Import: insert error:", insertErr);
+        return res.status(500).json({ error: "Failed to save imported classes." });
+      }
+
+      return res.json({
+        ok: true,
+        inserted: inserted.length,
+        classes: inserted,
+      });
+    } catch (err) {
+      console.error("Import: server error:", err);
+      return res.status(500).json({ error: "Server error during class import." });
+    }
+  });
+
+
 /* ---------------------------- DEBUG ---------------------------- */
 // Are we alive?
 app.get("/health", (_req, res) => res.json({ ok: true, ts: Date.now() }));
