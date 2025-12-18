@@ -399,7 +399,32 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-app.post("/auth/logout", (req, res) => req.session.destroy(() => res.json({ ok: true })));
+app.post("/auth/logout", (req, res) => {
+  // Clear BOTH possible cookie variants (covers mismatched CLIENT_ORIGIN / proxy cases)
+  const variants = [
+    { path: "/", httpOnly: true, sameSite: "lax", secure: false },
+    { path: "/", httpOnly: true, sameSite: "none", secure: true },
+  ];
+
+  // Also clear without options (sometimes helps if options mismatch)
+  res.clearCookie("gradeify.sid");
+  for (const opts of variants) res.clearCookie("gradeify.sid", opts);
+
+  // If no session, we’re done
+  if (!req.session) return res.status(204).end();
+
+  // Explicitly unset userId and save once, then destroy
+  req.session.userId = null;
+
+  req.session.save(() => {
+    req.session.destroy(() => {
+      // Regenerate a fresh empty session id so old sid can’t be reused
+      req.sessionStore?.generate?.(req);
+      return res.status(204).end();
+    });
+  });
+});
+
 
 // Current user (works for either auth style)
 app.get("/auth/me", async (req, res) => {
