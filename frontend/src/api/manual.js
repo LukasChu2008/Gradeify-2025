@@ -1,4 +1,6 @@
-const API_BASE = (import.meta?.env?.VITE_API_BASE ?? "").trim();
+const API_BASE =
+  (import.meta?.env?.VITE_API_BASE ?? "").trim() || "http://localhost:3001";
+
 
 async function request(path, { method = "GET", body, headers, timeoutMs = 10000 } = {}) {
   const controller = new AbortController();

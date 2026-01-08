@@ -10,6 +10,8 @@ import { Server as SocketIOServer } from "socket.io";
 import { supabase, newId } from "./db.js";
 import OpenAI from "openai";
 import StudentVue from "studentvue";
+import jwt from "jsonwebtoken";
+
 
 dotenv.config();
 
@@ -38,14 +40,43 @@ const io = new SocketIOServer(server, {
 });
 
 /* -------------------------- middleware -------------------------- */
-app.use(helmet());
+app.use(
+  helmet({
+    // dev-friendly; prevents CORP from blocking cross-origin XHR/fetch reads
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+
+    // dev-friendly; COOP can mess with things like popups / OAuth / tooling
+    crossOriginOpenerPolicy: false,
+
+    // optional: CSP can be overkill during dev; uncomment if you still get weird blocking
+    // contentSecurityPolicy: false,
+  })
+);
+
 app.use(express.json());
+const allowedOrigins = new Set([
+  rawOrigin, // whatever CLIENT_ORIGIN is
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+]);
+
 app.use(
   cors({
-    origin: rawOrigin,
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (origin.startsWith("chrome-extension://")) return cb(null, true);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
+
+// ✅ handle preflight
+app.options("*", cors());
+
 app.use(
   session({
     name: "gradeify.sid",
@@ -63,6 +94,32 @@ function requireUser(req, res, next) {
   if (!req.session?.userId) return res.status(401).json({ error: "Not logged in" });
   next();
 }
+
+function requireUserOrToken(req, res, next) {
+  if (req.session?.userId) return next();
+
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer (.+)$/);
+  if (!m) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const secret = process.env.SESSION_SECRET || "dev-secret-change-me";
+    const decoded = jwt.verify(m[1], secret);
+    req.session = req.session || {};
+    req.session.userId = decoded.userId;
+    return next();
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+}
+
+
+app.post("/auth/extension-token", requireUser, (req, res) => {
+  const secret = process.env.SESSION_SECRET || "dev-secret-change-me";
+  const token = jwt.sign({ userId: req.session.userId }, secret, { expiresIn: "7d" });
+  res.json({ ok: true, token });
+});
+
 
 
 function buildPrompt({ subject, topic, difficulty, numQuestions }) {
@@ -214,7 +271,7 @@ app.post("/api/generate-practice", async (req, res) => {
     });
 
     // BSD Chrome extension -> import classes from StudentVUE
-  app.post("/api/import/studentvue", requireUser, async (req, res) => {
+  app.post("/api/import/studentvue", requireUserOrToken, async (req, res) => {
     try {
       const userId = req.session.userId;
       const { mode, classes } = req.body || {};
@@ -970,4 +1027,14 @@ app.delete("/groups/:groupId/classes/:id", requireUser, requireGroupMember, asyn
 
 // --- start server ---
 const PORT = process.env.PORT || 3001;
+app.use((err, req, res, next) => {
+  console.error("❌ Express error:", err?.message || err);
+
+  if (String(err?.message || "").startsWith("CORS blocked")) {
+    return res.status(403).json({ ok: false, error: err.message });
+  }
+
+  return res.status(500).json({ ok: false, error: err.message || "Internal Server Error" });
+});
+
 server.listen(PORT, () => console.log(`✅ Backend running on ${PORT} (Socket.IO active)`));
